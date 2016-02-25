@@ -1,0 +1,5 @@
+Sample Purchase Order Email
+
+Purchase Order Number @@ORDERNUMBER@@
+
+from manager.usbeveragenet.com

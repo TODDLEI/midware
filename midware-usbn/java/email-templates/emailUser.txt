@@ -1,0 +1,52 @@
+Dear 
+@@NAME@@ 
+,
+
+Congratulations! Your USBN online account has been created for 
+@@LOCATION@@ 
+, 
+@@CUSTOMER@@ 
+. Here is some important information about your USBN online account.
+
+
+
+Getting Started:
+
+You can access your account by going to www.usbeveragenet.com and clicking on the CLIENT LOGIN button.
+
+ 
+ 
+
+Your Account:
+
+Your account USERNAME is: 
+@@USERNAME@@ 
+and PASSWORD is: 
+@@PASSWORD@@ 
+. 
+
+
+To make changes to your account, including changes to your email address and password, go to the ADMIN tab in the USBN Manager.
+
+
+If you have any questions or concerns please feel free call us at 888.298.3641 or email us at support@beerboard.com
+
+ 
+
+Cheers,
+
+ 
+
+Tom "TJ" Young
+
+Director of Client Relations
+
+US Beverage Net, Inc.
+
+tom@beerboard.com
+
+(o) 315-579-2363
+
+(c) 315-491-5191
+
+(f)  315-579-4337

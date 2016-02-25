@@ -1,0 +1,44 @@
+<testParameters>
+  <numClients>1</numClients>
+  <requestsPerClient>4</requestsPerClient>
+  <methodWeights>
+    <method name="countCustomerInstances">1</method>
+    <method name="checkLan">1</method>
+    <method name="getCityAndState">1</method>
+    <method name="enrollCustomer">1</method>
+    <method name="addProduct">1</method>
+    <method name="removeProduct">1</method>
+    <method name="getInvoice">1</method>
+    <method name="getInvoiceList">1</method>
+    <method name="setPin">1</method>
+    <method name="getMaterials">1</method>
+    <method name="getAccountStatus">1</method>
+    <method name="getBillingGroup">1</method>
+    <method name="countUsernameInstances">1</method>
+    <method name="changeAddress">1</method>
+    <method name="addPropel">1</method>
+    <method name="getGeneralAccount">1</method>
+    <method name="getCustomerProducts">1</method>
+    <method name="isServiceNumberActive">1</method>
+    <method name="setBillingInformation">1</method>
+    <method name="getAmountDue">1</method>
+    <method name="getCustomerEmail">1</method>
+    <method name="setEmail">1</method>
+    <method name="queueEFT">1</method>
+  
+    <method name="doesIdentityExist">1</method>
+    <method name="doesMyDatanetExist">1</method>
+    <method name="createMyDatanetAccount">1</method>
+    <method name="authMyDatanetUser">1</method>
+    <method name="setMyDatanetSecurityQA">1</method>
+    <method name="getMyDatanetSecurityQ">1</method>
+    <method name="checkMyDatanetSecurityA">1</method>
+    <method name="setMyDatanetPassword">1</method>
+  
+    <method name="getEquifaxScore">1</method>
+    <method name="doesNameMatchSSN">1</method>
+    <method name="getCreditDecisions">1</method>
+  
+    <method name="dingCreditCard">1</method>
+  </methodWeights>
+</testParameters>

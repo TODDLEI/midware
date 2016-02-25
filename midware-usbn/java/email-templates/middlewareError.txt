@@ -1,0 +1,5 @@
+An error has occurred on middleware @@SERVER@@:
+
+	@@TIME@@
+
+	@@ERROR@@

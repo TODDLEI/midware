@@ -1,0 +1,22 @@
+/AsyncMessageProcessor.java/1.20/Tue Apr 19 16:27:50 2011//
+/CleanerUpper.java/1.2/Wed Dec 21 18:27:30 2005//
+/DatabaseConnectionManager.java/1.42/Mon Sep 21 13:39:28 2015//
+/DatabaseConnectionWrapper.java/1.5/Thu Dec 22 17:25:27 2005//
+/DateParameter.java/1.2/Fri Jul 23 18:22:55 2010//
+/DateTimeParameter.java/1.5/Tue Jun 08 19:28:48 2010//
+/ErrorMailer.java/1.10/Wed Jan 27 17:51:01 2016//
+/Handler.java/1.1.1.1/Fri Aug 26 19:16:01 2005//
+/HandlerException.java/1.1.1.1/Fri Aug 26 19:16:01 2005//
+/HandlerMap.java/1.1.1.1/Fri Aug 26 19:16:01 2005//
+/HandlerResponse.java/1.1.1.1/Fri Aug 26 19:16:01 2005//
+/HandlerUtils.java/1.10/Thu Nov 05 12:46:14 2015//
+/LoggedStatement.java/1.2/Tue Apr 29 20:49:04 2008//
+/MessageException.java/1.1.1.1/Fri Aug 26 19:16:01 2005//
+/MessageListener.java/1.23/Mon Sep 21 13:39:28 2015//
+/MessageListenerSettings.java/1.1.1.1/Fri Aug 26 19:16:01 2005//
+/MessageProcessor.java/1.220/Sun Sep 29 08:14:02 2013//
+/RegisteredConnection.java/1.44/Mon Jun 29 08:40:34 2015//
+/SOAPMessage.java/1.8/Tue Apr 19 16:28:15 2011//
+D/handlers////
+D/queue////
+D/security////

@@ -1,0 +1,50 @@
+## MessageListener.props
+## $Id: MessageListener.props,v 1.4 2014/03/06 15:49:13 sravindran Exp $
+
+# server.id must be unique within this server's cluster
+server.id=1
+server.admin=pat@terakeet.net
+
+# address of an outgoing mail server
+mail.server.smtp=mail.usbeveragenet.com
+
+# stuff relevant to the listener
+listener.hostname=vonnegut.terakeet.net
+listener.port=2957
+listener.handlerMapPath=handlerMap.xml
+listener.handlerMapInterval=10
+listener.requireSSL=false
+listener.requireClientCerts=false
+listener.keyStore=security/eCare.keystore
+listener.keyStorePassword=terakeet
+
+# stuff relevant to all handlers
+handlers.tdsDriver=net.sourceforge.jtds.jdbc.Driver
+handlers.tdsPrefix=jdbc:jtds:sqlserver
+
+# stuff relative to message queueing; times are in milliseconds
+queue.shared=/home/midware/dist/queue
+queue.local=./queue
+queue.cleanupInterval=1800000
+queue.active.ttl=30000
+queue.active.processInterval=5000
+queue.active.maxAttempts=3
+queue.waiting.ttl=30000
+queue.waiting.processInterval=5000
+queue.response.ttl=600000
+queue.tempfile.ttl=600000
+
+# stuff relevant to automated emailing
+email.templatePath=./email-templates
+
+# stuff relevant to logging
+logger.configPath=log4j.props
+
+# stuff relevant to QuickSellHandler
+quickSell.server=69.67.245.46
+quickSell.database=Terakeet
+quickSell.user=sa
+quickSell.password=terakeet
+
+#stuff relavent to Client Key security
+security.keypath=/home/midware/secure/client.key

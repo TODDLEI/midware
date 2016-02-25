@@ -1,0 +1,84 @@
+# $Id: log4j.props,v 1.4 2014/03/06 15:49:13 sravindran Exp $
+log4j.rootLogger=OFF
+
+
+#### --------------- LOGGERS ---------------------------------------------------
+
+# Debugging Loggers.  To record debugging information, add as many classes here
+# Note that logging travels up the class hierarchy, so make sure if you specifiy
+# multiple classes (or packages) that they aren't children of each other or there
+# will be duplicate logging.
+# Additionally, you can debug specific methods by including the method name after
+# the handler path, like net.soapware.terakeet.handlers.DummyHandler.testMethod
+log4j.logger.net.terakeet.soapware.handlers=INFO,debugLog
+log4j.logger.net.terakeet.soapware.security=INFO,debugLog
+log4j.logger.net.terakeet.soapware.handlers.DigitalDiningHandler.parseDBFFile=DEBUG
+log4j.logger.net.terakeet.soapware.handlers.GetHandler.adminChangeCustomer=DEBUG
+log4j.logger.net.terakeet.util=INFO,debugLog
+
+# OTHER LOGGERS
+################################################################################
+# DATABASE       WARN: Exceptions, INFO: Connections, DEBUG: Queries 
+log4j.logger.custom.database=INFO,databaseLog
+# XML MESSAGES   DEBUG: Every XML Request and Response
+log4j.logger.custom.xml=DEBUG,xmlLog
+# CONNECTION     DEBUG:  TCP Stuff 
+log4j.logger.custom.connection=DEBUG,connectionLog
+# READINGS/SALES WARN: Security Violations, INFO: One per message, DEBUG: Summary
+log4j.logger.custom.reading=DEBUG,readingLog
+# PORTAL ACTION  WARN: Security Violation, INFO: One per action, DEBUG: Action detail   
+log4j.logger.custom.portalAction=INFO,portalActionLog
+# ACCESS VIOLATION   WARN:  Violations
+log4j.logger.custom.accessViolation=WARN,accessViolationLog
+# ERRORS        ERROR: Midware Errors, WARN: Handler Exceptions
+log4j.logger.custom.error=WARN,errorLog,debugLog
+# QUEUE LOG
+log4j.logger.custom.queue=DEBUG,queueLog
+
+#### --------------- APPENDERS (The Actual Log Files ---------------------------
+log4j.appender.debugLog=org.apache.log4j.DailyRollingFileAppender
+log4j.appender.debugLog.layout=org.apache.log4j.PatternLayout
+log4j.appender.debugLog.layout.ConversionPattern=%d [%t] %-5p - %m%n
+log4j.appender.debugLog.File=logs/debug.log
+
+log4j.appender.databaseLog=org.apache.log4j.DailyRollingFileAppender
+log4j.appender.databaseLog.layout=org.apache.log4j.PatternLayout
+log4j.appender.databaseLog.layout.ConversionPattern=%d [%t] %-5p - %m%n
+log4j.appender.databaseLog.File=logs/database.log
+
+log4j.appender.xmlLog=org.apache.log4j.DailyRollingFileAppender
+log4j.appender.xmlLog.layout=org.apache.log4j.PatternLayout
+log4j.appender.xmlLog.layout.ConversionPattern=%d [%t] %-5p - %m%n
+log4j.appender.xmlLog.File=logs/xml.log
+
+log4j.appender.connectionLog=org.apache.log4j.DailyRollingFileAppender
+log4j.appender.connectionLog.layout=org.apache.log4j.PatternLayout
+log4j.appender.connectionLog.layout.ConversionPattern=%d [%t] %-5p - %m%n
+log4j.appender.connectionLog.File=logs/connection.log
+
+log4j.appender.readingLog=org.apache.log4j.DailyRollingFileAppender
+log4j.appender.readingLog.layout=org.apache.log4j.PatternLayout
+log4j.appender.readingLog.layout.ConversionPattern=%d [%t] %-5p - %m%n
+log4j.appender.readingLog.File=logs/reading.log
+
+log4j.appender.portalActionLog=org.apache.log4j.DailyRollingFileAppender
+log4j.appender.portalActionLog.layout=org.apache.log4j.PatternLayout
+log4j.appender.portalActionLog.layout.ConversionPattern=%d [%t] %-5p - %m%n
+log4j.appender.portalActionLog.File=logs/portal.log
+
+log4j.appender.accessViolationLog=org.apache.log4j.RollingFileAppender
+log4j.appender.accessViolationLog.layout=org.apache.log4j.PatternLayout
+log4j.appender.accessViolationLog.layout.ConversionPattern=%d [%t] %-5p - %m%n
+log4j.appender.accessViolationLog.File=logs/accessViolation.log
+
+log4j.appender.errorLog=org.apache.log4j.RollingFileAppender
+log4j.appender.errorLog.layout=org.apache.log4j.PatternLayout
+log4j.appender.errorLog.layout.ConversionPattern=%d [%t] %-5p - %m%n
+log4j.appender.errorLog.File=logs/error.log
+
+log4j.appender.queueLog=org.apache.log4j.DailyRollingFileAppender
+log4j.appender.queueLog.layout=org.apache.log4j.PatternLayout
+log4j.appender.queueLog.layout.ConversionPattern=%d [%t] %-5p - %m%n
+log4j.appender.queueLog.File=logs/queue.log
+
+#### ---------------------------------------------------------------------------

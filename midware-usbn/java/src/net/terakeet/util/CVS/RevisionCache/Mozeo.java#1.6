@@ -1,0 +1,50 @@
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
+
+package net.terakeet.util;
+
+/**
+ *
+ * @author suba
+ */
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.URL;
+import java.net.URLConnection;
+
+public class Mozeo {
+    public String send(String to, String unixTime, String msgId, String msg, String stop) {
+        try {
+            String userName                 = "usbevnet";
+            String password                 ="DZVQZAPo";
+            String companyKey               ="ASbS9R5k7MtunBN";
+            String prodUrl                  = "https://www.mozeo.com/mozeo/customer/sendtxt.php";
+            String devUrl                   = "https://www.mozeo.com/mozeo/customer/sendtxt-dev.php"; 	
+            String smsUrl                   = prodUrl;
+            smsUrl                          +="?to="+to+"&username="+userName+"&password="+password+"&companykey="+companyKey+"&messageid="+msgId+"&messagebody="+msg+"&datetimestamp="+unixTime+"&stop="+stop+"&";
+            URL url                         = new URL(smsUrl);
+            URLConnection conn              = url.openConnection();	        	
+            conn.setAllowUserInteraction(false);       
+            conn.setDoOutput(true); 
+            conn.setRequestProperty("User-Agent","Mozilla/5.0 (Windows NT 5.1; rv:19.0) Gecko/20100101 Firefox/19.0");            
+            conn.connect();
+            BufferedReader serverResponse   = new BufferedReader(new InputStreamReader(conn.getInputStream()));           
+            String line;
+            StringBuffer response           = new StringBuffer(); 
+            while((line = serverResponse.readLine()) != null) {
+                response.append(line);
+                response.append('\r');
+            }
+            serverResponse.close();
+            return response.toString();
+          }catch (Exception e) {
+           e.printStackTrace();
+           return "";
+        }
+    }
+
+    }

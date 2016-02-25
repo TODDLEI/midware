@@ -1,0 +1,29 @@
+
+Middleware Enhancements
+    Standarize every method to use the Secure Session access levels.
+    Refactor/extract common utility methods to appropriate classes.
+    *Review & update the logging present in all methods.
+    --Added the framework for an access and accessWarning log
+    Decide if we should move additional features from handlers to net.terakeet.usbn classes.  
+    Consider adding public key encryption support on top of secret key encryption for the Client Key
+    Finish the Line Readings clean-up method.  
+    Finish and test the new RemoteReading method.
+    Create a test page in the manager on development for Line Reading tests.
+    
+
+Website Manager Enhancements
+    Document/test the (design) limitations of all pages with regards to large result sets.  E.G 400 beverages in inventory.
+    Check all pages in IE/Firefox and run all pages against the W3 validator (still a lot of HTML errors)
+    Consider session caching certain middleware results, like reports, or the front page.
+    Add sorting to a number of report pages.
+    Modify the Perl Client to use the Client Key system.  Decide how to allocate the assigned keys.
+    Add more functions to manage Systems.  Current add/delete/modify functions should be easier to use  
+    Redo the formatting on the POS Beverages page.  Potential problem: Beverages that contain the wrong products.
+
+
+PicoFlash Enhancements
+    Create an algorithm to assign priority to readings to keep/discard when storage memory becomes full.
+    Harpagon-failure reporting.  Possibly per-system. 
+    Additional stress testing, documentation of failure states.
+    Add support for more than 8 harpagon devices.
+    Test the latest bug fixes.  Check that the Pico connects to production midware and increments lines from zero.  

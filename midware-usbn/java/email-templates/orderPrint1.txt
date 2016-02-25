@@ -1,0 +1,28 @@
+Purchase Order
+
+Date:
+@@DATE@@
+
+Supplier: 
+@@SUPPLIER_NAME@@
+@@SUPPLIER_ADDRESS1@@
+@@SUPPLIER_ADDRESS2@@
+
+Shipping Address:
+@@SHIPPING_ADDRESS1@@
+@@SHIPPING_ADDRESS2@@
+
+Account Number:
+---
+
+Order Number:
+@@ORDER_NUMBER@@
+
+Order Contents:
+SKU, Name, Quantity
+
+@@DRAFT@@
+@@NONDRAFT@@
+
+
+End of Order

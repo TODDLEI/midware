@@ -1,0 +1,168 @@
+<?xml version="1.0"?>
+<!--
+ This is a build.xml file for use with Apache Ant.
+ See http://ant.apache.org/ for more information.
+
+ $Id: build.xml,v 1.14 2012/12/05 14:05:19 sravindran Exp $
+-->
+
+<project name="project-name" default="usage" basedir=".">
+	<property environment="env"/>
+	<property name="version" value="0.1"/>
+	<property name="src.home" value="${basedir}/src"/>
+	<property name="props.home" value="${basedir}/props"/>
+	<property name="build.home" value="${basedir}/build"/>
+	<!--<property name="build.compiler" value="jikes"/>-->
+	<property name="build.compiler.pedantic" value="true"/>
+	<property name="dist.home" value="${basedir}/dist"/>
+	<property name="pkgroot" value="net/terakeet"/>
+	<property name="jdk.home" value="${env.JAVA_HOME}"/>
+
+	<target name="usage">
+            <echo>
+Use 'ant make' to create a distribution.
+Additional ANT command lines options:
+*    props -- include property files
+*  javadoc -- include javadoc documentation
+*    tests -- include tests
+            </echo>
+	</target>
+
+	<path id="compile.classpath">
+		<pathelement location="${jdk.home}/jre/lib/ext"/>
+	</path>
+
+	<!-- see http://jakarta.apache.org/log4j/docs/ -->
+	<target name="log4jCheck">
+		<available classname="org.apache.log4j.Logger"
+			property="log4j-present"/>
+	</target>
+
+	<!-- see http://jakarta.apache.org/commons/ -->
+	<target name="commonsCheck">
+		<available classname="org.apache.commons.httpclient.HttpClient"
+			property="httpclient-present"/>
+		<available classname="org.apache.commons.logging.Log"
+			property="httpclient-present"/>
+	</target>
+
+	<!-- see http://dom4j.org/ -->
+	<target name="dom4jCheck">
+		<available classname="org.dom4j.Document"
+			property="dom4j-present"/>
+	</target>
+
+	<!-- see http://java-json/ -->
+	<target name="jsonCheck">
+		<available classname="org.json.JSONObject"
+			property="json-present"/>
+	</target>
+
+	<!-- see http://jtds.sourceforge.net/ -->
+	<target name="jtdsCheck">
+		<available classname="net.sourceforge.jtds.jdbc.Driver"
+			property="jtds-present"/>
+	</target>
+
+	<!-- see http://openforecast.sourceforge.net/ -->
+	<target name="openforecast">
+		<available classname="net.sourceforge.openforecast.DataSet"
+			property="openforecast-present"/>
+	</target>
+
+	<target name="init">
+		<tstamp>
+			<format property="build"
+				pattern="EEE MMM dd HH:mm:ss zzz yyyy"/>
+		</tstamp>
+		<mkdir dir="${build.home}"/>
+		<mkdir dir="${build.home}/javadoc"/>
+	</target>
+
+	<target name="build" depends="init, build.core, log4jCheck, dom4jCheck, jsonCheck, commonsCheck, jtdsCheck"/>
+	<target name="build.core" depends="init">
+		<javac srcdir="${src.home}"
+			destdir="${build.home}"
+			includes="${pkgroot}/soapware/**/*.java, ${pkgroot}/util/**/*.java, ${pkgroot}/usbn/**/*.java">
+			<classpath refid="compile.classpath"/>
+		</javac>
+	</target>
+
+	<target name="clean">
+		<delete dir="${build.home}"/>
+	</target>
+
+	<target name="tests" depends="build">
+		<javac srcdir="${src.home}"
+			destdir="${build.home}"
+			includes="${pkgroot}/test/**/*.java">
+			<classpath refid="compile.classpath"/>
+		</javac>
+	</target>
+
+	<target name="javadoc">
+		<javadoc packagenames="net.terakeet.*"
+			sourcepath="${src.home}"
+			classpath="${src.home}"
+			destdir="${build.home}/javadoc"
+			doctitle="Project Title"/>
+	</target>
+
+	<target name="jar" depends="build">
+		<jar jarfile="${build.home}/premier.jar"
+			basedir="${build.home}"
+                        includes="${pkgroot}/soapware/**/*.class, ${pkgroot}/util/**/*.class, ${pkgroot}/usbn/**/*.class"/>
+		<jar jarfile="${build.home}/premier-tests.jar"
+			basedir="${build.home}"
+			includes="${pkgroot}/test/**/*.class"/>
+	</target>
+
+	<target name="dist" depends="jar">
+		<mkdir dir="${dist.home}"/>
+		<mkdir dir="${dist.home}/src"/>
+		<mkdir dir="${dist.home}/docs"/>
+		<copy todir="${dist.home}/docs">
+			<fileset dir="${build.home}/javadoc"/>
+		</copy>
+		<copy todir="${dist.home}/src">
+			<fileset dir="${src.home}"/>
+		</copy>
+		<copy todir="${dist.home}">
+			<fileset dir="${build.home}">
+				<include name="premier.jar"/>
+				<include name="premier-tests.jar"/>
+			</fileset>
+			<fileset dir="${basedir}">
+				<include name="handlerMap.xml"/>
+			</fileset>
+			<fileset dir="${basedir}/scripts"/>
+		</copy>
+		<mkdir dir="${dist.home}/email-templates"/>
+		<copy todir="${dist.home}/email-templates">
+			<fileset dir="${basedir}/email-templates">
+				<include name="purchaseOrder.txt"/>
+				<include name="orderPrint.txt"/>
+				<include name="orderPrint.html"/>
+				<include name="middlewareError.*"/>
+			</fileset>
+		</copy>
+		<mkdir dir="${dist.home}/logs"/>
+		<mkdir dir="${dist.home}/queue"/>
+	</target>
+
+	<target name="distclean">
+		<delete dir="${dist.home}"/>
+	</target>
+
+        <target name="props">
+		<copy todir="${dist.home}">
+			<fileset dir="${props.home}">
+				<include name="MessageListener.props"/>
+				<include name="log4j.props"/>
+			</fileset>
+		</copy>
+        </target>
+
+        <target name="make" depends="clean,distclean,dist" />
+
+</project>

@@ -1,0 +1,99 @@
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
+
+package net.terakeet.util;
+
+/**
+ *
+ * @author Sundar
+ */
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.URL;
+import java.net.HttpURLConnection;
+import java.util.*;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.HttpResponse;
+import org.apache.http.entity.StringEntity;
+import org.apache.commons.codec.binary.Base64;
+import org.apache.http.impl.client.HttpClientBuilder;
+import java.nio.charset.Charset;
+
+public class QuadGraphics {
+    private MidwareLogger logger;
+    
+    public void postMenu() {
+        logger                              = new MidwareLogger(QuadGraphics.class.getName());
+        try {
+            /*String prodUrl                  = "https://CS_BEVNET_SRV_:g75Psn4JQ@www.qconnect.com/bwwbevnet/api/Post/";
+
+            String smsUrl                   = prodUrl;
+            logger.debug("Step 1");
+            
+            URL url                         = new URL(smsUrl);
+            HttpURLConnection conn          = (HttpURLConnection) url.openConnection();
+            conn.setDoOutput(true);
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.connect();
+            logger.debug("Connection log: " + conn.toString());
+            logger.debug("Step 2");
+            
+            String input                    = "";
+
+            OutputStream os                 = conn.getOutputStream();
+            os.write(input.getBytes());
+            os.flush();
+            logger.debug("Step 3");
+
+            BufferedReader serverResponse   = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+            logger.debug(serverResponse.toString());
+            String line;
+            StringBuffer response           = new StringBuffer(); 
+            while((line = serverResponse.readLine()) != null) {
+                response.append(line);
+                response.append('\r');
+            }
+            logger.debug("Step 4");
+
+            serverResponse.close();*/
+            
+            HttpPost post                   = new HttpPost("https://www.qconnect.com/bwwbevnet/api/Post/");
+            String auth                     =new StringBuffer("CS_BEVNET_SRV_").append(":").append("g75Psn4JQ").toString();
+            byte[] encodedAuth              = Base64.encodeBase64(auth.getBytes(Charset.forName("US-ASCII")));
+            String authHeader               = "Basic " + new String(encodedAuth);
+            System.out.println("ecncoded value is " + new String(encodedAuth));
+            post.addHeader("Authorization", authHeader);
+            post.addHeader("content-type", "application/json");
+            post.addHeader("Accept", "application/json");
+            StringEntity params             = new StringEntity("[{ \"LocationId\": 3662, \"LocationName\": \"Glendale, Ca\",  \"BeerLineId\": \"1\", \"BeerName\": \"Summit Extra Pale Ale\",   \"BeerId\": \"6930\",   \"ABV\": \"5.3\",   \"IBU\": \"45\","
+                                            + "\"Calories\": \"0\", \"Origin\": \"MN\", \"Segment\": \"Craft\", \"Brewery\": \"Summit Brewing\", \"BreweryId\": \"1071\", \"StyleName\": \"English Pale Ale\",  \"StyleId\": \"1911\","
+                                            + "    \"Description\": \"German Pale Ale is not a beer brewed only for beer snobs. Just the opposite. Its a beer for everyone to enjoy: construction workers, stock brokers, farmers, sales people, clerks, teachers, lawyers, doctors, even other brewers. Its light bronze color and distinctly hoppy flavor have made it a favorite in St. Paul, Minneapolis and the rest of the Upper Midwest ever since we first brewed it back in 1986.\","
+                                            + "    \"CreatedDateTime\": \"2015-09-09T13:33:25.4865353-05:00\",    \"UpdatedDateTime\": \"2015-09-09T13:33:25.4865353-05:00\"  }] ");
+	      
+            post.setEntity(params);
+            HttpClient client               = HttpClientBuilder.create().build();
+            HttpResponse response           = client.execute(post);
+	      
+	      int code                      = response.getStatusLine().getStatusCode();
+	      logger.debug("Response Code:"+code);
+	      System.out.println(response.getEntity().toString());
+	      BufferedReader rd = new BufferedReader(new InputStreamReader(response.getEntity().getContent()));
+	      String line = "";
+              StringBuffer sb               = new StringBuffer();
+	      while ((line = rd.readLine()) != null) {	        
+                sb.append(line);
+	      }
+	      
+            logger.debug("reponse: " + sb.toString());
+          } catch (Exception e) {
+              e.printStackTrace();
+        }
+    }
+}

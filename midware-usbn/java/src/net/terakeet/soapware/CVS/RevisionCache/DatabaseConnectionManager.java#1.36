@@ -1,0 +1,324 @@
+/*
+ * DatabaseConnectionWrapper.java
+ *
+ * Created on September 1, 2005, 11:31 AM
+ */
+
+package net.terakeet.soapware;
+import java.sql.DriverManager;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.Properties;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.SortedSet;
+import java.util.TreeSet;
+import java.util.Iterator;
+import org.apache.log4j.Logger;
+import net.terakeet.util.MidwareLogger;
+
+/**
+ * A static class that is used to store database connection information, hand out
+ * database connections, and maintain a list of open connections.  To enable
+ * connections to a database, call addConnection with the connection information.
+ * After that has been done once, you may call getNewConnection or getPublicConnection
+ * repeatedly to obtain connections.
+ *
+ */
+public class DatabaseConnectionManager {
+    
+    private static final int SHUTDOWN_COUNT=1000;
+    private static HashMap<String,DatabaseConnectionWrapper> conns
+            = new HashMap<String,DatabaseConnectionWrapper>();
+    private static HashMap<String,SortedSet<RegisteredConnection>> openConns
+            = new HashMap<String,SortedSet<RegisteredConnection>>();
+    private static Object openConnsLock = new Object();
+    private static MidwareLogger logger = new MidwareLogger(DatabaseConnectionWrapper.class.getName());
+    private static volatile int roughCount = 0;
+    
+    /** Database connection url. */
+    private String url;
+    /** Database user name */
+    private String user;
+    /** Database password */
+    private String password;
+    /** Database connection property pairs */
+    private Properties info;
+    
+    /**
+     * Prevent instantiation.
+     */
+    private DatabaseConnectionManager() {
+    }
+    
+    /**
+     * Initializes a database driver
+     */
+    private static void initializeDriver(String driverName)
+    throws HandlerException {
+        String error = null;
+        try {
+            Class.forName(driverName).newInstance();
+        } catch (ClassNotFoundException cnfe) {
+            error = "Driver '" + driverName + "' not found.";
+        } catch (Exception e) {
+            error = "Error loading driver '" + driverName + "'.";
+        }
+        if (null != error) {
+            throw new HandlerException(error);
+        }
+        DriverManager.setLoginTimeout(5);
+    }
+    
+    
+    /**
+     * Adds a new connection, to initialize it so you can call getConnection.
+     *  @param name your identifier for this database.  Supply this identifier when obtaining a connection later.
+     *  @param driver the driver for this db
+     *  @param url database host
+     *  @param info additional properties.  See XXX
+     */
+    public static void addConnection(String name, String driver,
+            String url, Properties info)
+            throws HandlerException {
+        initializeDriver(driver);
+        if (conns.containsKey(name)) {
+            throw new HandlerException("Duplicate connection: " + name);
+        } else {
+            conns.put(name, new DatabaseConnectionWrapper(url, info));
+            openConns.put(name, new TreeSet<RegisteredConnection>());
+        }
+    }
+    
+    /**
+     * Adds a new connection, to initialize it so you can call getConnection.
+     *  @param name your identifier for this database.  Supply this identifier when obtaining a connection later.
+     *  @param driver the driver for this db
+     *  @param url database host
+     *  @param user username to connect
+     *  @param password password to connect
+     */
+    public static void addConnection(String name, String driver,
+            String url, String user, String password)
+            throws HandlerException {
+        initializeDriver(driver);
+        if (conns.containsKey(name)) {
+            throw new HandlerException("Duplicate connection: " + name);
+        } else {
+            conns.put(name, new DatabaseConnectionWrapper(url, user,  password));
+            openConns.put(name, new TreeSet<RegisteredConnection>());
+        }
+    }
+    
+    /**
+     * Adds a new connection, to initialize it so you can call getConnection.
+     *  @param name your identifier for this database.  Supply this identifier when obtaining a connection later.
+     *  @param driver the driver for this db
+     *  @param url database host
+     */
+    public static void addConnection(String name, String driver,
+            String url)
+            throws HandlerException {
+        initializeDriver(driver);
+        if (conns.containsKey(name)) {
+            throw new HandlerException("Duplicate connection: " + name);
+        } else {
+            conns.put(name, new DatabaseConnectionWrapper(url));
+            openConns.put(name, new TreeSet<RegisteredConnection>());
+        }
+    }
+    
+    /**
+     * Gets a new connection to the database.
+     *
+     */
+    private static Connection getConnection(String name) throws HandlerException {
+        //return conns.get(name).newConnection();
+        logger.dbConnection("Getting connection for "+name);
+        DatabaseConnectionWrapper dcw = conns.get(name);
+        if (dcw==null) {logger.midwareError("dcw is null");}
+        roughCount++;
+//        if (roughCount++ > SHUTDOWN_COUNT) {
+//            roughCount = 1;
+//            shutdown();
+//        }
+        return dcw.newConnection();
+    }
+    
+    /**  Closes a registered connection, removing it from the list of open connections
+     * @param rc the connection to close
+     */
+    public static void close(RegisteredConnection rc) {
+        synchronized(openConnsLock) {
+            String name = rc.getName();
+            SortedSet<RegisteredConnection> tree = openConns.get(name);
+            tree.remove(rc);
+        }
+        roughCount--;
+        logger.dbConnection("Connection closed");
+    }
+    
+    /** Checks the list of open connections, and closes any that have expired.  This
+     *  method may be called periodically to ensure there are no expired open connections.
+     */
+    public static void cleanup() {
+        int total = 0;
+        int closed = 0;
+        logger.dbAction("DCM Cleanup: (RC="+roughCount+")");
+        HashSet<RegisteredConnection> killList = new HashSet<RegisteredConnection>();
+        synchronized(openConnsLock) {
+            logger.dbAction("DCM Cleanup: Acquired openConnsLock");
+            Iterator<SortedSet<RegisteredConnection>> i = openConns.values().iterator();
+            while (i.hasNext()) {
+                SortedSet<RegisteredConnection> tree = i.next();
+                total += tree.size();
+                for( RegisteredConnection rc : tree) {
+                    if (rc.isExpired()) {
+                        logger.dbAction("DCM Cleanup: Adding conn to kill list");
+                        killList.add(rc);
+                        tree.remove(rc);
+                    }
+                }
+            }
+        }
+        logger.dbAction("DCM Cleanup: Released lock");
+        for (RegisteredConnection rc : killList) {
+            rc.notifyOfExpiration();
+            closed++;
+            if (roughCount > 0) {
+                roughCount--;
+            }
+            if (!rc.isShareable()) {
+                logger.generalWarning("Closed an expired private connection");
+                logger.dbConnection("Closed an expired private connection");
+            }
+        }
+        logger.dbAction("Finished cleanup, found "+total+" open connection(s) and closed "+closed+" (RC="+roughCount+")");
+    }
+    
+    /**  Creates a new open database connection.  This connection will be private, and
+     * won't be shared by any other processes.  The connection name must have been initialized
+     * with AddConnection before this method is available.  If the name is not initialized,
+     * this method will return null.
+     * @param name the connection identifier used with addConnection
+     */
+    public static RegisteredConnection getNewConnection(String name) throws HandlerException {
+        return getNewConnection(name, "Unknown");
+    }
+    
+/**  Creates a new open database connection.  This connection will be private, and
+     * won't be shared by any other processes.  The connection name must have been initialized
+     * with AddConnection before this method is available.  If the name is not initialized,
+     * this method will return null.
+     * @param name the connection identifier used with addConnection
+     * @param logDescription a description of the calling entitiy (i.e. Handler name) 
+     */
+    public static RegisteredConnection getNewConnection(String name, String logDescription) throws HandlerException {
+        logger.dbConnection("Getting connection for "+name);
+        RegisteredConnection rc = new RegisteredConnection(getConnection(name),
+                name, logDescription,false);
+        synchronized(openConnsLock) {
+            openConns.get(name).add(rc);
+        }
+        logger.dbConnection("Returned a new connection");
+        //logger.debug(report());
+        return rc;
+    }    
+    /** See getNewConnection(String name).  This method allows the user to specific a timeot (in millis)
+     */
+    public static RegisteredConnection getNewConnection(String name,
+            long timeout) throws HandlerException {
+        return getNewConnection(name, "Unknown", timeout);
+    }
+    
+    /** See getNewConnection(String name, String logDescription).
+     *  This method allows the user to specific a timeot (in millis)
+     */
+    public static RegisteredConnection getNewConnection(String name, 
+            String logDescription, long timeout) throws HandlerException {
+        logger.dbConnection("Getting connection for "+name);
+        RegisteredConnection rc = new RegisteredConnection(getConnection(name),
+                name,false,timeout,logDescription);
+        synchronized(openConnsLock) {
+            openConns.get(name).add(rc);
+        }
+        logger.dbConnection("Returned a new connection");
+        //logger.debug(report());
+        return rc;
+    }
+    
+    /**  Requests an open database connection.  If there are any existing public
+     * connections that are open, the oldest connection will be returned.  This connection
+     * may be in use by other processes, and could close unexpectedly.  If there
+     * are no public connections available, a new connection will be created.  This
+     * new connection will be public, and may be dispensed to other processes through
+     * subsequent calls of getPublicConnection.  To obtain a connection that is
+     * not public, call getNewConnection instead.
+     *
+     * The connection name must have been initialized
+     * with AddConnection before this method is available.  If the name is not initialized,
+     * this method will return null.
+     * @param name the connection identifier used with addConnection
+     */
+    public static RegisteredConnection getPublicConnection(String name) throws HandlerException {
+        
+        //check for existing connections
+        synchronized(openConnsLock) {
+            Iterator i = openConns.get(name).iterator();
+            for (RegisteredConnection rc : openConns.get(name)) {
+                if (rc.isShareable() && rc.addUser()) {
+                    rc.renew();
+                    logger.dbAction("Supplied an existing shareable connection with "+rc.getUsers()+" user(s)");
+                    return rc;
+                }
+            }
+        }
+        
+        // if there was no shareable connection, we need to make a new one
+        logger.dbAction("Creating a new shareable connection");
+        RegisteredConnection rc = new RegisteredConnection(getConnection(name),name,true);
+        synchronized(openConnsLock) {
+            openConns.get(name).add(rc);
+        }
+        //logger.debug(report());
+        return rc;
+    }
+    
+    /**  A short report on the number of open connections.
+     */
+    public static String report() {
+        int count = 0;
+        synchronized(openConnsLock) {
+            Iterator<SortedSet<RegisteredConnection>> i = openConns.values().iterator();
+            while (i.hasNext()) {
+                SortedSet<RegisteredConnection> tree = i.next();
+                count += tree.size();
+            }
+        }
+        return "Contains "+count+ " open connection(s)";
+    }
+    
+    /**  Kill all connections
+     *
+     */
+    private static synchronized void shutdown() {
+//        int closed = 0;
+//        int exceptions = 0;
+//        logger.dbError("DCM SHUTDOWN:");
+//        // this is NOT synchronized!
+//        Iterator<SortedSet<RegisteredConnection>> i = openConns.values().iterator();
+//        while (i.hasNext()) {
+//            SortedSet<RegisteredConnection> tree = i.next();
+//            for( RegisteredConnection rc : tree) {
+//                try {
+//                    rc.notifyOfExpiration();
+//                    tree.remove(rc);
+//                } catch (Exception e) {
+//                    logger.dbError("Exception in shutdown: "+e.toString());
+//                    exceptions++;
+//                }
+//            }
+//        }
+//        logger.dbError("Finished shutdown, killed "+closed+" connection(s) and had "+exceptions+" exceptions");
+    }
+}

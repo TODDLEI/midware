@@ -1,0 +1,457 @@
+/*
+ * To change this template, choose Tools | Templates
+ * and open the template in the editor.
+ */
+package net.terakeet.soapware.handlers;
+
+/**
+ *
+ * @author suba
+ */
+import net.terakeet.soapware.*;
+import net.terakeet.soapware.security.*;
+import net.terakeet.util.MidwareLogger;
+import org.apache.log4j.Logger;
+import org.dom4j.Element;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.*;
+import java.text.*;
+import java.io.*;
+import java.text.SimpleDateFormat;
+import net.terakeet.util.TemplatedMessage;
+import net.terakeet.util.ParameterFile;
+import net.terakeet.util.MailException;
+import net.terakeet.soapware.handlers.report.*;
+import net.terakeet.usbn.WebPermission;
+import net.terakeet.util.pdfCrowd;
+//import com.pdfcrowd.*;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import net.terakeet.util.printableMenu;
+import javapns.Push;
+import javapns.communication.exceptions.CommunicationException;
+import javapns.communication.exceptions.KeystoreException;
+import javapns.notification.PushNotificationPayload;
+import javapns.notification.Payload;
+import com.google.android.gcm.server.Message;
+import com.google.android.gcm.server.Result;
+import com.google.android.gcm.server.Sender;
+
+public class SQLBevManagerMobileTransHandler implements Handler {
+    
+    private MidwareLogger logger;
+    private static final String transConnName
+                                            = "auper";
+    private RegisteredConnection transconn;
+    private SecureSession ss;
+    private DecimalFormat cf;
+    private LocationMap locationMap;
+    private static SimpleDateFormat dateFormat 
+                                            = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss");
+    private static SimpleDateFormat dbDateFormat
+                                            = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    private static SimpleDateFormat newDateFormat 
+                                            = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    private static SimpleDateFormat timeFormat 
+                                            = new SimpleDateFormat("hh:mm aa");
+    
+    private LineOffsetMap lineOffsetMap;
+    private ProductMap productMap;
+    private ChildLevelMap childLevelMap;
+    private RegionExclusionMap regionExclusionMap;
+    private BarMap barMap;
+    private ParentLevelMap parentLevelMap;    
+    private RegionProductMap regionProductMap;
+        
+    /**
+     * Creates a new instance of SQLBOSSHandler
+     */
+    public SQLBevManagerMobileTransHandler() throws HandlerException {
+        HandlerUtils.initializeClientKeyManager();
+        logger                              = new MidwareLogger(SQLBOSSHandler.class.getName());
+        transconn                           = null;
+        locationMap                         = null;
+        cf                                  = (DecimalFormat) NumberFormat.getInstance(Locale.US);
+    }
+    
+    public void handle(Element toHandle, Element toAppend) throws HandlerException {
+        
+        String function                     = toHandle.getName();
+        String responseNamespace            = (String)SOAPMessage.getURIMap().get("tkmsg");
+        
+        String clientKey                    = HandlerUtils.getOptionalString(toHandle,"clientKey");
+        ss                                  = ClientKeyManager.getSession(clientKey);
+        
+        logger                              = new MidwareLogger(SQLBOSSHandler.class.getName(), function);
+        logger.debug("SQLBevManagerMobileHandler processing method: "+function);
+        logger.xml("request: " + toHandle.asXML());
+        
+        transconn                           = DatabaseConnectionManager.getNewConnection(transConnName, function + " (SQLBevManagerMobileHandler)");
+        
+        cf.applyPattern("#.####");
+        try {
+            // All methods require an admin client key
+            if (ss.getLocation() == 0 && ss.getClientId() == 1 && ss.getSecurityLevel().canAdmin()) {
+                /*if ("updateBevMobileNotification".equals(function)) {
+                    updateBevMobileNotification(toHandle, responseFor(function,toAppend));
+                } else if ("addUpdateDeleteBeveragePlu".equals(function)) {
+                    addUpdateDeleteBeveragePlu(toHandle, responseFor(function,toAppend));
+                } else if ("updateGlanolaLineCleaning".equals(function)) {
+                    updateGlanolaLineCleaning(toHandle, responseFor(function,toAppend));
+                } else if ("addBevPushMessage".equals(function)) {
+                    addBevPushMessage(toHandle, responseFor(function,toAppend));
+                } else if ("addInventoryBeveragePrice".equals(function)) {
+                    addInventoryBeveragePrice(toHandle, responseFor(function,toAppend));
+                } else {
+                    logger.generalWarning("Unknown function '" + function + "'.");
+                }*/
+            } else {
+                // access violation
+                addErrorDetail(toAppend, "Access violation: This method is not available with your client key");
+                logger.portalAccessViolation("Tried to call '"+function+"' with key "+ss.toString());
+            }
+        } catch (Exception e) {
+            if (e instanceof HandlerException) {
+                throw (HandlerException) e;
+            } else {
+                logger.midwareError("Non-handler exception thrown in ReportHandler: "+e.toString());
+                logger.midwareError("XML: " + toHandle.asXML());
+                throw new HandlerException(e);
+            }
+        } finally {
+            // Log database use
+            int queryCount                  = transconn.getQueryCount();
+            logger.dbAction("Executed " + queryCount + " transaction quer" + (queryCount == 1 ? "y" : "ies"));
+            transconn.close();
+        }
+        
+        logger.xml("response: " + toAppend.asXML());
+        
+    }
+    
+    private Element responseFor(String s, Element e) {
+        String responseNamespace = (String)SOAPMessage.getURIMap().get("tkmsg");
+        return e.addElement("m:"+s+"Response",responseNamespace);
+    }
+    
+    
+     private void close(Statement s) {
+        if (s != null) {
+            try { s.close(); } catch (SQLException sqle) { }
+        }
+    }
+    private void close(ResultSet rs) {
+        if (rs != null) {
+            try { rs.close(); } catch (SQLException sqle) { }
+        }
+    }
+    private void close(Connection c) {
+        if (c != null) {
+            try { c.close(); } catch (SQLException sqle) { }
+        }
+    }
+    private void close(RegisteredConnection c) {
+        c.close();
+    }
+    
+    private void addErrorDetail(Element toAppend, String message) {
+        toAppend.addElement("error").addElement("detail").addText(message);
+    }
+    private int getCallerId(Element toHandle)  {
+        try {
+        return HandlerUtils.getOptionalInteger(HandlerUtils.getRequiredElement(toHandle,"caller"),"callerId");
+        } catch(Exception e){
+            logger.debug(e.getMessage());
+            return 0;
+        }
+        //return 0;
+    }
+    
+    private boolean checkForeignKey(String table, int value) throws SQLException, HandlerException {
+        return checkForeignKey(table,"id",value);
+    }
+    
+    private boolean checkForeignKey(String table, String field, int value) throws SQLException, HandlerException {
+        
+        PreparedStatement stmt = null;
+        ResultSet rs = null;
+        boolean result = false;
+        
+        String select = "SELECT " + field + " FROM " + table +
+                " WHERE " + field + " = ?";
+        
+        stmt = transconn.prepareStatement(select);
+        stmt.setInt(1, value);
+        rs = stmt.executeQuery();
+        result = rs.next();
+        
+        close(rs);
+        close(stmt);
+        return result;
+    }
+    
+    
+    private boolean checkForeignKey(String table, int value, RegisteredConnection transconn) throws SQLException {
+        return checkForeignKey(table, "id", value, transconn);
+    }
+    
+    
+    private boolean checkForeignKey(String table, String field, int value, RegisteredConnection transconn) throws SQLException {
+
+        PreparedStatement stmt = null;
+        ResultSet rs = null;
+        boolean result = false;
+
+        String select = "SELECT " + field + " FROM " + table + " WHERE " + field + "=?";
+
+        stmt = transconn.prepareStatement(select);
+        stmt.setInt(1, value);
+        rs = stmt.executeQuery();
+        result = rs.next();
+
+        close(rs);
+        close(stmt);
+
+        return result;
+    }
+    
+    public boolean isValidAccessUser( int callerId, int location, boolean isCustomer){
+        boolean isValid                  = true;
+        int user[]                      ={60,60,198,166,201,212,3302,347}; //203,199         
+        for(int i=0;i<user.length;i++){
+            if(user[i]==callerId){
+                if(!isCustomer){
+                    if(location != 425) {
+                        isValid                     = false;
+                    }
+                } else {
+                    if(location != 205) {
+                        isValid                     = false;
+                    }
+                }
+            }
+        }
+        return isValid;
+    }
+
+    public void addBevPushMessageMap(int messageId, int location, int user, int color, int type, String message) throws HandlerException {
+
+        transconn                           = DatabaseConnectionManager.getNewConnection(transConnName, " (SQLBevManagerMobileTransHandler)");
+        PreparedStatement stmt              = null;
+        ResultSet rs                        = null, rsDetails = null;
+
+        try {
+            stmt                            = transconn.prepareStatement("SELECT id FROM bevPushMessageCenter p WHERE p.user=? AND pushMessage= ? AND location = ? AND type =?");
+            stmt.setInt(1,user);
+            stmt.setInt(2,messageId);
+            stmt.setInt(3,location);
+            stmt.setInt(4,type);
+            rsDetails                       = stmt.executeQuery();
+            if(rsDetails.next()){
+                stmt                        = transconn.prepareStatement("UPDATE  bevPushMessageCenter  SET message = ?, color =?, lastUpdate=now() WHERE  pushMessage = ? AND location = ? AND type = ? AND  user =?");
+                stmt.setString(1,message);
+                stmt.setInt(2,color);
+                stmt.setInt(3,messageId);
+                stmt.setInt(4,location);
+                stmt.setInt(5,type);
+                stmt.setInt(6,user);
+                stmt.executeUpdate();
+            } else {
+                stmt                        = transconn.prepareStatement("INSERT INTO bevPushMessageCenter (pushMessage, location, message, user, color,type, lastUpdate) VALUES (?,?,?,?,?,?, now());");
+                stmt.setInt(1,messageId);
+                stmt.setInt(2,location);
+                stmt.setString(3,message);
+                stmt.setInt(4,user);
+                stmt.setInt(5,color);
+                stmt.setInt(6,type);
+                stmt.executeUpdate();
+            }
+
+            stmt                        = transconn.prepareStatement("SELECT id FROM bevPushMessageMap WHERE user=? AND pushMessage= ?");
+            stmt.setInt(1,user);
+            stmt.setInt(2,messageId);
+            rsDetails                   = stmt.executeQuery();
+            if(!rsDetails.next()){
+                stmt                    = transconn.prepareStatement("INSERT INTO bevPushMessageMap (user, pushMessage, sent) VALUES (?,?,0);");
+                stmt.setInt(1,user);
+                stmt.setInt(2,messageId);
+                stmt.executeUpdate();
+            }
+
+
+
+        } catch (SQLException sqle) {
+            logger.dbError("Database error in bevPushMessagee: " + sqle.getMessage());
+            throw new HandlerException(sqle);
+        } finally {
+            close(rsDetails);
+            close(rs);
+            close(stmt);
+        }
+        transconn.close();
+    }
+
+
+
+    public void addUserHistory(int userId, String action, int locationId, String message, int mobileId) throws HandlerException {
+        transconn                           = DatabaseConnectionManager.getNewConnection(transConnName, " (SQLBevManagerMobileTransHandler)");
+        String checkAction                  = " SELECT id FROM task WHERE abbrev=? LIMIT 1";
+        String insertFullLog                = " INSERT INTO userHistoryMobile (user,task,description,location,mobile,timestamp) "
+                                            + " VALUES (?,?,?,?,?,now()) ";
+        PreparedStatement stmt              = null;
+        ResultSet rs                        = null;
+
+        try {
+            // check that the action exists (has a task id)
+            int taskId                      = 0;
+            stmt                            = transconn.prepareStatement(checkAction);
+            stmt.setString(1, action);
+            rs                              = stmt.executeQuery();
+            if (rs.next()) {
+                taskId                      = rs.getInt(1);
+            } else {
+                // if the task doesn't exist, we'll insert it as task 0 and
+                // prepend the name of the supplied task to the message;
+                message                     = "UNKNOWN ("+action+") "+message;
+            }
+
+            stmt                            = transconn.prepareStatement(insertFullLog);
+            stmt.setInt(1,userId);
+            stmt.setInt(2,taskId);
+            stmt.setString(3, message);
+            stmt.setInt(4,locationId);
+            stmt.setInt(5,mobileId);
+            stmt.executeUpdate();
+        } catch (SQLException sqle) {
+            logger.dbError("Database error in getProductSet: " + sqle.getMessage());
+            throw new HandlerException(sqle);
+        } finally {
+            close(rs);
+            close(stmt);
+        }
+        transconn.close();
+    }
+
+    public void addUserVisitHistory(int userId, String action, int locationId, String message,int minute, int mobileId) throws HandlerException {
+        transconn                           = DatabaseConnectionManager.getNewConnection(transConnName, " (SQLBevManagerMobileTransHandler)");
+        String checkAction                  = " SELECT id FROM task WHERE abbrev=? LIMIT 1";
+        String insertFullLog                = " INSERT INTO userHistoryMobile (user,task,description,location,mobile,timestamp) "
+                                            + " VALUES (?,?,?,?,?,now()) ";
+        String checkLog                     = "SELECT id FROM userHistoryMobile WHERE user=? AND task=? AND location = ? AND timestamp between DATE_SUB(now(), INTERVAL ? MINUTE ) AND now();";
+        PreparedStatement stmt              = null;
+        ResultSet rs                        = null;
+
+        try {
+            // check that the action exists (has a task id)
+            int taskId                      = 0;
+            stmt                            = transconn.prepareStatement(checkAction);
+            stmt.setString(1, action);
+            rs                              = stmt.executeQuery();
+            if (rs.next()) {
+                taskId                      = rs.getInt(1);
+            } else {
+                // if the task doesn't exist, we'll insert it as task 0 and
+                // prepend the name of the supplied task to the message;
+                message                     = "UNKNOWN ("+action+") "+message;
+            }
+            if(taskId > 0 && locationId > 0){
+            stmt = transconn.prepareStatement(checkLog);
+            stmt.setInt(1, userId);
+            stmt.setInt(2, taskId);
+            stmt.setInt(3, locationId);
+            stmt.setInt(4, minute);
+            rs = stmt.executeQuery();
+            if (!rs.next()) {
+
+            stmt                            = transconn.prepareStatement(insertFullLog);
+            stmt.setInt(1,userId);
+            stmt.setInt(2,taskId);
+            stmt.setString(3, message);
+            stmt.setInt(4,locationId);
+            stmt.setInt(5,mobileId);
+            stmt.executeUpdate();
+            }
+            }
+        } catch (SQLException sqle) {
+            logger.dbError("Database error in getProductSet: " + sqle.getMessage());
+            throw new HandlerException(sqle);
+        } finally {
+            close(rs);
+            close(stmt);
+        }
+        transconn.close();
+    }
+
+    public int insertBevMobileUser(int user, String deviceToken) throws HandlerException {
+        transconn                           = DatabaseConnectionManager.getNewConnection(transConnName, " (SQLBevManagerMobileTransHandler)");
+        int mobileId                        = 0;
+        PreparedStatement stmt              = null;
+        ResultSet rs                        = null;
+        try {
+            stmt            = transconn.prepareStatement("INSERT INTO bevMobileUser (user, deviceToken, registeredTime) Values(?,?,now()) ");
+            stmt.setInt(1,user);
+            stmt.setString(2,deviceToken);
+            stmt.executeUpdate();
+
+            stmt            = transconn.prepareStatement("SELECT LAST_INSERT_ID()");
+            rs              = stmt.executeQuery();
+            if (rs.next()) {
+                mobileId    = rs.getInt(1);
+            }
+        } catch (SQLException sqle) {
+            logger.dbError("Database error: "+sqle.toString());
+            throw new HandlerException(sqle);
+        } finally {
+            close(rs);
+            close(stmt);
+        }
+        transconn.close();
+        return mobileId;
+    }
+
+    public void updateBevMobileUser(int userId) throws HandlerException {
+        transconn                           = DatabaseConnectionManager.getNewConnection(transConnName, " (SQLBevManagerMobileTransHandler)");
+        PreparedStatement stmt              = null;
+        ResultSet rs                        = null;
+        String sql                          = "UPDATE bevMobileUser SET lastAccess = NOW() WHERE id= ?;";
+        try {
+            stmt                            = transconn.prepareStatement(sql);
+            stmt.setInt(1,userId);
+            stmt.executeUpdate();
+        } catch (SQLException sqle) {
+            logger.dbError("Database error: "+sqle.toString());
+            throw new HandlerException(sqle);
+        } finally {
+            close(rs);
+            close(stmt);
+        }
+        transconn.close();
+    }
+
+    public void insertBevMobileLocationMap(int mobileUserId, int locationId) throws HandlerException {
+        transconn                           = DatabaseConnectionManager.getNewConnection(transConnName, " (SQLBevManagerMobileTransHandler)");
+        PreparedStatement stmt              = null;
+        ResultSet rs                        = null;
+        String sql                          = "INSERT INTO bevMobileLocationMap (user, location, active) VALUES (?,?,?);";
+        try {
+            stmt                            = transconn.prepareStatement(sql);
+            stmt.setInt(1, mobileUserId);
+            stmt.setInt(2, locationId);
+            stmt.setInt(3, 0);
+            stmt.executeUpdate();
+        } catch (SQLException sqle) {
+            logger.dbError("Database error: "+sqle.toString());
+            throw new HandlerException(sqle);
+        } finally {
+            close(rs);
+            close(stmt);
+        }
+        transconn.close();
+    }
+        
+      
+}

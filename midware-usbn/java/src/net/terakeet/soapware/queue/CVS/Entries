@@ -1,0 +1,11 @@
+D
+/ActiveQueueProcessor.java/1.6/Tue Apr 19 16:28:19 2011//
+/ExpiredMessageFilter.java/1.5/Tue Oct 23 20:27:31 2007//
+/PrimaryQueueWatcher.java/1.2/Wed Apr 09 18:21:20 2008//
+/QueueCleaner.java/1.3/Tue Apr 19 16:28:11 2011//
+/QueueException.java/1.1.1.1/Fri Aug 26 19:16:01 2005//
+/QueueManager.java/1.19/Wed Jan 09 19:26:00 2013//
+/QueueManagerListener.java/1.1.1.1/Fri Aug 26 19:16:01 2005//
+/QueueProcessor.java/1.1.1.1/Fri Aug 26 19:16:01 2005//
+/RunningMessages.java/1.6/Tue Oct 23 20:54:45 2007//
+/WaitingQueueProcessor.java/1.2/Tue Oct 23 19:36:44 2007//

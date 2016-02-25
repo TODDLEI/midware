@@ -1,0 +1,53 @@
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
+
+package src.net.terakeet.util;
+
+/**
+ *
+ * @author suba
+ */
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.URL;
+import java.net.URLConnection;
+
+public class Mozeo {
+    public String send(String to,String unixTime,String msgId,String msg, String stop) {         
+        try {
+            String userName                 = "usbevnet";
+            String password                 ="DZVQZAPo";
+            String companyKey               ="ASbS9R5k7MtunBN";
+            String prodUrl                  = "https://www.mozeo.com/mozeo/customer/sendtxt.php";
+            String devUrl                   = "https://www.mozeo.com/mozeo/customer/sendtxt-dev.php"; 	
+            String smsUrl                   = devUrl;
+            smsUrl                          +="?to="+to+"&username="+userName+"&password="+password+"&companykey="+companyKey+"&messageid="+msgId+"&messagebody="+msg+"&datetimestamp="+unixTime+"&stop="+stop;
+            URL url                         = new URL(smsUrl);
+            URLConnection conn              = url.openConnection();	        	
+            conn.setAllowUserInteraction(false);       
+            conn.setDoOutput(true); 
+            conn.setRequestProperty("User-Agent","Mozilla/5.0 (Windows NT 5.1; rv:19.0) Gecko/20100101 Firefox/19.0");
+            conn.addRequestProperty("Authorization","Bearer AASCL2vW2nrlApD_pxYEufKqHPKKeh7pUJDRozhC7HhdQHQg5LwEiMOTWbag84LF-qIbqJfqBQKVBSInMobNS3dL6eQFsitcRsOd1GlH1yovO71dNMthIiiXstMyEQnvPCRoc3rcc7Fj-mERY5mWgErP36sJ17xbGOuMI4E_wI0y6npnc-tp-DdTVAixlWoA6U8duz4TUrhS_FZe_KB-8OmYTU37YTPzjP8NmbTJNBwwnCmPUExGtri3XDsjBxceuwJxLuj_F2lOJL40kKvqM-BdewV2ebdPlg__0dMi42ZGAYDjCo8AvTHE7Ckqa1r4J8InetJoUuUejyGj8l0KhK4FtF8lipsDWz5BiwbOD25yY_6MecqXGMVc1hqJjfIs3Ky9IKC5PxL3sx92CQh_I_NoMhDonazC59L8xUSIYz7Kf837IthOqergxnxYyVmlpUiFRyyUO2vqtM28vHu7K1NuVAyO_1vWt-sEi19aPew");
+            conn.connect();
+            BufferedReader serverResponse   = new BufferedReader(new InputStreamReader(conn.getInputStream()));           
+            String line;
+            StringBuffer response           = new StringBuffer(); 
+            while((line = serverResponse.readLine()) != null) {
+                response.append(line);
+                response.append('\r');
+            }
+            serverResponse.close();
+            return response.toString();
+          }catch (Exception e) {
+           e.printStackTrace();
+           return "";
+        }
+
+
+  }
+    
+}

@@ -1,0 +1,1073 @@
+/*
+ * To change this template, choose Tools | Templates
+ * and open the template in the editor.
+ */
+package net.terakeet.soapware.handlers;
+
+/**
+ *
+ * @author suba
+ */
+import net.terakeet.soapware.*;
+import net.terakeet.soapware.security.*;
+import net.terakeet.util.MidwareLogger;
+import org.apache.log4j.Logger;
+import org.dom4j.Element;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.*;
+import java.text.*;
+import java.io.*;
+import java.text.SimpleDateFormat;
+import net.terakeet.util.TemplatedMessage;
+import net.terakeet.util.ParameterFile;
+import net.terakeet.util.MailException;
+import net.terakeet.soapware.handlers.report.*;
+import net.terakeet.usbn.WebPermission;
+import net.terakeet.util.pdfCrowd;
+//import com.pdfcrowd.*;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import net.terakeet.util.printableMenu;
+import javapns.Push;
+import javapns.communication.exceptions.CommunicationException;
+import javapns.communication.exceptions.KeystoreException;
+import javapns.notification.PushNotificationPayload;
+import javapns.notification.Payload;
+import com.google.android.gcm.server.Message;
+import com.google.android.gcm.server.Result;
+import com.google.android.gcm.server.Sender;
+
+public class SQLBevManagerMobileTransHandler implements Handler {
+    
+    private MidwareLogger logger;
+    private static final String transConnName
+                                            = "auper";
+    private RegisteredConnection transconn;
+    private SecureSession ss;
+    private DecimalFormat cf;
+    private LocationMap locationMap;
+    private static SimpleDateFormat dateFormat 
+                                            = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss");
+    private static SimpleDateFormat dbDateFormat
+                                            = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    private static SimpleDateFormat newDateFormat 
+                                            = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    private static SimpleDateFormat timeFormat 
+                                            = new SimpleDateFormat("hh:mm aa");
+    
+    private LineOffsetMap lineOffsetMap;
+    private ProductMap productMap;
+    private ChildLevelMap childLevelMap;
+    private RegionExclusionMap regionExclusionMap;
+    private BarMap barMap;
+    private ParentLevelMap parentLevelMap;    
+    private RegionProductMap regionProductMap;
+        
+    /**
+     * Creates a new instance of SQLBOSSHandler
+     */
+    public SQLBevManagerMobileTransHandler() throws HandlerException {
+        HandlerUtils.initializeClientKeyManager();
+        logger                              = new MidwareLogger(SQLBOSSHandler.class.getName());
+        transconn                           = null;
+        locationMap                         = null;
+        cf                                  = (DecimalFormat) NumberFormat.getInstance(Locale.US);
+    }
+    
+    public void handle(Element toHandle, Element toAppend) throws HandlerException {
+        
+        String function                     = toHandle.getName();
+        String responseNamespace            = (String)SOAPMessage.getURIMap().get("tkmsg");
+        
+        String clientKey                    = HandlerUtils.getOptionalString(toHandle,"clientKey");
+        ss                                  = ClientKeyManager.getSession(clientKey);
+        
+        logger                              = new MidwareLogger(SQLBOSSHandler.class.getName(), function);
+        logger.debug("SQLBevManagerMobileHandler processing method: "+function);
+        logger.xml("request: " + toHandle.asXML());
+        
+        transconn                           = DatabaseConnectionManager.getNewConnection(transConnName, function + " (SQLBevManagerMobileHandler)");
+        
+        cf.applyPattern("#.####");
+        try {
+            // All methods require an admin client key
+            if (ss.getLocation() == 0 && ss.getClientId() == 1 && ss.getSecurityLevel().canAdmin()) {
+                if ("updateBevMobileNotification".equals(function)) {
+                    updateBevMobileNotification(toHandle, responseFor(function,toAppend));
+                } else if ("addUpdateDeleteBeveragePlu".equals(function)) {
+                    addUpdateDeleteBeveragePlu(toHandle, responseFor(function,toAppend));
+                } else if ("updateGlanolaLineCleaning".equals(function)) {
+                    updateGlanolaLineCleaning(toHandle, responseFor(function,toAppend));
+                } else if ("addBevPushMessage".equals(function)) {
+                    addBevPushMessage(toHandle, responseFor(function,toAppend));
+                } else if ("addInventoryBeveragePrice".equals(function)) {
+                    addInventoryBeveragePrice(toHandle, responseFor(function,toAppend));
+                } else {
+                    logger.generalWarning("Unknown function '" + function + "'.");
+                }
+            } else {
+                // access violation
+                addErrorDetail(toAppend, "Access violation: This method is not available with your client key");
+                logger.portalAccessViolation("Tried to call '"+function+"' with key "+ss.toString());
+            }
+        } catch (Exception e) {
+            if (e instanceof HandlerException) {
+                throw (HandlerException) e;
+            } else {
+                logger.midwareError("Non-handler exception thrown in ReportHandler: "+e.toString());
+                logger.midwareError("XML: " + toHandle.asXML());
+                throw new HandlerException(e);
+            }
+        } finally {
+            // Log database use
+            int queryCount                  = transconn.getQueryCount();
+            logger.dbAction("Executed " + queryCount + " transaction quer" + (queryCount == 1 ? "y" : "ies"));
+            transconn.close();
+        }
+        
+        logger.xml("response: " + toAppend.asXML());
+        
+    }
+    
+    private Element responseFor(String s, Element e) {
+        String responseNamespace = (String)SOAPMessage.getURIMap().get("tkmsg");
+        return e.addElement("m:"+s+"Response",responseNamespace);
+    }
+    
+    
+     private void close(Statement s) {
+        if (s != null) {
+            try { s.close(); } catch (SQLException sqle) { }
+        }
+    }
+    private void close(ResultSet rs) {
+        if (rs != null) {
+            try { rs.close(); } catch (SQLException sqle) { }
+        }
+    }
+    private void close(Connection c) {
+        if (c != null) {
+            try { c.close(); } catch (SQLException sqle) { }
+        }
+    }
+    private void close(RegisteredConnection c) {
+        c.close();
+    }
+    
+    private void addErrorDetail(Element toAppend, String message) {
+        toAppend.addElement("error").addElement("detail").addText(message);
+    }
+    private int getCallerId(Element toHandle)  {
+        try {
+        return HandlerUtils.getOptionalInteger(HandlerUtils.getRequiredElement(toHandle,"caller"),"callerId");
+        } catch(Exception e){
+            logger.debug(e.getMessage());
+            return 0;
+        }
+        //return 0;
+    }
+    
+    private boolean checkForeignKey(String table, int value) throws SQLException, HandlerException {
+        return checkForeignKey(table,"id",value);
+    }
+    
+    private boolean checkForeignKey(String table, String field, int value) throws SQLException, HandlerException {
+        
+        PreparedStatement stmt = null;
+        ResultSet rs = null;
+        boolean result = false;
+        
+        String select = "SELECT " + field + " FROM " + table +
+                " WHERE " + field + " = ?";
+        
+        stmt = transconn.prepareStatement(select);
+        stmt.setInt(1, value);
+        rs = stmt.executeQuery();
+        result = rs.next();
+        
+        close(rs);
+        close(stmt);
+        return result;
+    }
+    
+    
+    private boolean checkForeignKey(String table, int value, RegisteredConnection transconn) throws SQLException {
+        return checkForeignKey(table, "id", value, transconn);
+    }
+    
+    
+    private boolean checkForeignKey(String table, String field, int value, RegisteredConnection transconn) throws SQLException {
+
+        PreparedStatement stmt = null;
+        ResultSet rs = null;
+        boolean result = false;
+
+        String select = "SELECT " + field + " FROM " + table + " WHERE " + field + "=?";
+
+        stmt = transconn.prepareStatement(select);
+        stmt.setInt(1, value);
+        rs = stmt.executeQuery();
+        result = rs.next();
+
+        close(rs);
+        close(stmt);
+
+        return result;
+    }
+    
+    public boolean isValidAccessUser( int callerId, int location, boolean isCustomer){
+        boolean isValid                  = true;
+        int user[]                      ={60,60,198,166,201,212,3302,347}; //203,199         
+        for(int i=0;i<user.length;i++){
+            if(user[i]==callerId){
+                if(!isCustomer){
+                    if(location != 425) {
+                        isValid                     = false;
+                    }
+                } else {
+                    if(location != 205) {
+                        isValid                     = false;
+                    }
+                }
+            }
+        }
+        return isValid;
+    }
+    
+    
+     private void updateBevMobileNotification(Element toHandle, Element toAppend) throws HandlerException {
+         
+         int locationId                     = HandlerUtils.getOptionalInteger(toHandle, "locationId");
+         int mobileUserId                   = HandlerUtils.getOptionalInteger(toHandle, "mobileUserId");
+         int active                         = HandlerUtils.getOptionalInteger(toHandle, "active");
+         
+         PreparedStatement stmt             = null;
+         ResultSet rs                       = null;
+         String sql                         = "UPDATE bevMobileLocationMap SET  active= ? WHERE user = ? AND location =?";
+        try {
+            if(mobileUserId >0) {
+                stmt                        = transconn.prepareStatement("SELECT id FROM bevMobileLocationMap WHERE user = ? AND location = ?");
+                stmt.setInt(1,mobileUserId);
+                stmt.setInt(2,locationId);
+                rs                          = stmt.executeQuery();
+                if (!rs.next()) {
+                    stmt                    = transconn.prepareStatement("INSERT INTO bevMobileLocationMap (user,location,active) VALUES(?,?,?)");
+                    stmt.setInt(1,mobileUserId);
+                    stmt.setInt(2,locationId);
+                    stmt.setInt(3,active);
+                    stmt.executeUpdate();
+                } else {
+                    stmt                    = transconn.prepareStatement(sql);
+                    stmt.setInt(1,active);
+                    stmt.setInt(2,mobileUserId);
+                    stmt.setInt(3,locationId);
+                    stmt.executeUpdate();
+                }
+            }
+        } catch (SQLException sqle) {
+            logger.dbError("Database error: "+sqle.toString());
+            throw new HandlerException(sqle);
+        } finally {
+            close(rs);
+            close(stmt);
+        }
+    }
+    
+    public int insertBevMobileUser(int user, String deviceToken) throws HandlerException {
+        transconn                           = DatabaseConnectionManager.getNewConnection(transConnName, " (SQLBevManagerMobileTransHandler)");
+        int mobileId                        = 0;
+        PreparedStatement stmt              = null;
+        ResultSet rs                        = null;
+        try {
+            stmt            = transconn.prepareStatement("INSERT INTO bevMobileUser (user, deviceToken, registeredTime) Values(?,?,now()) ");
+            stmt.setInt(1,user);
+            stmt.setString(2,deviceToken);
+            stmt.executeUpdate();
+
+            stmt            = transconn.prepareStatement("SELECT LAST_INSERT_ID()");
+            rs              = stmt.executeQuery();
+            if (rs.next()) {
+                mobileId    = rs.getInt(1);
+            }
+        } catch (SQLException sqle) {
+            logger.dbError("Database error: "+sqle.toString());
+            throw new HandlerException(sqle);
+        } finally {
+            close(rs);
+            close(stmt);
+        }
+        transconn.close();
+        return mobileId;
+    }
+    
+    public void updateBevMobileUser(int userId) throws HandlerException {
+        transconn                           = DatabaseConnectionManager.getNewConnection(transConnName, " (SQLBevManagerMobileTransHandler)");
+        PreparedStatement stmt              = null;
+        ResultSet rs                        = null;
+        String sql                          = "UPDATE bevMobileUser SET lastAccess = NOW() WHERE id= ?;";
+        try {
+            stmt                            = transconn.prepareStatement(sql);
+            stmt.setInt(1,userId);
+            stmt.executeUpdate();
+        } catch (SQLException sqle) {
+            logger.dbError("Database error: "+sqle.toString());
+            throw new HandlerException(sqle);
+        } finally {
+            close(rs);
+            close(stmt);
+        }
+        transconn.close();
+    }
+    
+    public void insertBevMobileLocationMap(int mobileUserId, int locationId) throws HandlerException {
+        transconn                           = DatabaseConnectionManager.getNewConnection(transConnName, " (SQLBevManagerMobileTransHandler)");
+        PreparedStatement stmt              = null;
+        ResultSet rs                        = null;
+        String sql                          = "INSERT INTO bevMobileLocationMap (user, location, active) VALUES (?,?,?);";
+        try {
+            stmt                            = transconn.prepareStatement(sql);
+            stmt.setInt(1, mobileUserId);
+            stmt.setInt(2, locationId);
+            stmt.setInt(3, 0);
+            stmt.executeUpdate();
+        } catch (SQLException sqle) {
+            logger.dbError("Database error: "+sqle.toString());
+            throw new HandlerException(sqle);
+        } finally {
+            close(rs);
+            close(stmt);
+        }
+        transconn.close();
+    }
+       
+    private void addUpdateDeleteBeveragePlu(Element toHandle, Element toAppend) throws HandlerException {
+        
+        int callerId                        = getCallerId(toHandle);
+        int location                        = HandlerUtils.getRequiredInteger(toHandle, "locationId");        
+        
+        String checkPlu                     =" SELECT id,bev.name FROM beverage bev  WHERE bev.location=? AND bev.plu=? LIMIT 1";
+        String getLastId                    =" SELECT LAST_INSERT_ID()";
+        String insertBev                    = " INSERT INTO beverage (name, location, plu,ounces,price, simple, pType) VALUES (?,?,?,?,?,1,1)";
+        String insertIng                    =" INSERT INTO ingredient (beverage, product, ounces)  VALUES (?,?,?)";
+        String updateBeverage               = "UPDATE beverage SET plu=?,ounces =?, price =? WHERE id=?";        
+        String deleteBeverage               = "DELETE FROM beverage WHERE id=?";
+        String deleteIngredient             = "DELETE FROM ingredient WHERE beverage=?";
+        
+        PreparedStatement stmt              = null;
+        ResultSet rs                        = null;
+        try {
+            if(callerId > 0 && location > 0 && isValidAccessUser(callerId, location,false)){
+             Iterator beverage   = toHandle.elementIterator("beverage");
+             while (beverage.hasNext()) {
+                Element bevPlu              = (Element) beverage.next();
+                int id                      = HandlerUtils.getOptionalInteger(bevPlu, "id");
+                String size                 = HandlerUtils.nullToString(HandlerUtils.getRequiredString(bevPlu, "size"),"0");                
+                String plu                  = HandlerUtils.nullToEmpty(HandlerUtils.getRequiredString(bevPlu, "plu"));                
+                int productId               = HandlerUtils.getRequiredInteger(bevPlu, "productId");
+                String productName          = HandlerUtils.nullToEmpty(HandlerUtils.getOptionalString(bevPlu, "productName"));
+                String priceValue           = HandlerUtils.nullToString(HandlerUtils.getOptionalString(bevPlu, "price"),"0.0");
+                if(priceValue==null || priceValue.trim().equals("")) {
+                    priceValue              = "0.0";
+                }
+                if(size==null || size.trim().equals("")||size.contains("Size")) {
+                    size                    = "0.0";
+                }
+                
+                 double quantity            = 0.0;
+                 double price               = 0.0;
+                 
+                 quantity                   = Double.parseDouble(size);
+                 price                      = Double.parseDouble(priceValue);
+                 
+                stmt                        = transconn.prepareStatement(checkPlu);
+                stmt.setInt(1, location);
+                stmt.setString(2, plu);
+                rs                          = stmt.executeQuery();                   
+                if (!rs.next()) { 
+                    if(id>0){
+                        stmt                = transconn.prepareStatement(updateBeverage);
+                        stmt.setString(1, plu);
+                        stmt.setDouble(2, quantity);
+                        stmt.setDouble(3, price);
+                        stmt.setInt(4, id);
+                        stmt.executeUpdate();
+                        
+                        
+                    } else {
+                        stmt                = transconn.prepareStatement(insertBev);
+                        stmt.setString(1, productName);
+                        stmt.setInt(2, location);
+                        stmt.setString(3, plu);
+                        stmt.setDouble(4, quantity);
+                        stmt.setDouble(5, price);
+                        stmt.executeUpdate();
+                        int beverageId      = -1;
+                        stmt                = transconn.prepareStatement(getLastId);
+                        rs = stmt.executeQuery();
+                        if (rs.next()) {
+                            String logMessage = "Added plu#" + plu;
+                            logger.portalDetail(callerId, "addBeverage", location, "beverage", beverageId, logMessage, transconn);
+                            beverageId      = rs.getInt(1);
+                            stmt            = transconn.prepareStatement(insertIng);
+                            stmt.setInt(1, beverageId);
+                            stmt.setInt(2, productId);
+                            stmt.setDouble(3, quantity);                            
+                            stmt.executeUpdate();
+                        }
+                    
+                    }
+                   
+                } else {
+                    if(id==rs.getInt(1)){
+                        stmt                = transconn.prepareStatement(updateBeverage);
+                        stmt.setString(1, plu);
+                        stmt.setDouble(2, quantity);
+                        stmt.setDouble(3, price);
+                        stmt.setInt(4, id);
+                        stmt.executeUpdate();
+                    } else {
+                         addErrorDetail(toAppend, "The plu '" + plu + "' already exists");
+                    }
+                }
+                
+              
+            }
+      
+             Iterator delBev                = toHandle.elementIterator("deleteBeverage");
+             while (delBev.hasNext()) {
+                Element bevPlu              = (Element) delBev.next();
+                int id                      = HandlerUtils.getRequiredInteger(bevPlu, "id");   
+                String plu                  = HandlerUtils.nullToEmpty(HandlerUtils.getRequiredString(bevPlu, "plu"));     
+                stmt                        = transconn.prepareStatement(checkPlu);
+                stmt.setInt(1, location);
+                stmt.setString(2, plu);
+                rs                          = stmt.executeQuery(); 
+                if(rs.next()){
+                    if(id==rs.getInt(1)){
+                        stmt = transconn.prepareStatement(deleteBeverage);
+                        stmt.setInt(1, rs.getInt(1));
+                        stmt.executeUpdate();
+                        logger.portalDetail(callerId, "deleteBeverage", location, "beverage", rs.getInt(1), "Deleted PLU " + plu, transconn);
+                        
+                        stmt = transconn.prepareStatement(deleteIngredient);
+                        stmt.setInt(1, rs.getInt(1));
+                        stmt.executeUpdate();
+                    } else {
+                        addErrorDetail(toAppend, "Unable to Delete PLU: " +plu );
+                    }
+                }
+                
+            }  
+            } else {
+                addErrorDetail(toAppend, "Invalid Access"  );
+            }
+        
+        } catch (SQLException sqle) {
+            logger.dbError("Database error in addRemoveComingSoonProducts: " + sqle.getMessage());
+            throw new HandlerException(sqle);
+        } finally {
+            close(rs);
+            close(stmt);
+        }
+
+    }
+       
+    private void updateGlanolaLineCleaning(Element toHandle, Element toAppend) throws HandlerException {
+             
+        String barname                      = HandlerUtils.getOptionalString(toHandle, "barname");
+        String cycle                        = HandlerUtils.getOptionalString(toHandle, "cycle");
+        String time                         = HandlerUtils.getOptionalString(toHandle, "time");
+        String lines                        = HandlerUtils.getOptionalString(toHandle, "lines");       
+        int locationId                      = HandlerUtils.getOptionalInteger(toHandle, "locationId");       
+        int abort                           = HandlerUtils.getOptionalInteger(toHandle, "abort");       
+
+        logger.debug("Bar Name:"+barname);
+        logger.debug("cycle:"+cycle);
+        logger.debug("time:"+time);
+        logger.debug("lines:"+lines);
+        logger.debug("locationId:"+locationId);
+        logger.debug("abort:"+abort);
+        
+        String selectLineId                 = "SELECT l.id FROM line l LEFT JOIN bar b ON b.id = l.bar "
+                                            + " WHERE l.status = 'RUNNING' AND b.location = ? AND l.lineNo = ?";
+        String selectLineCleaning           = "SELECT id FROM glanolaLineCleaning WHERE location = ? AND line = ? "
+                                            + " AND NOW() BETWEEN startTime and endTime";
+        String insertLineCleaning           = "INSERT INTO glanolaLineCleaning (location, line, startTime, endTime) "
+                                            + " VALUES (?, ?, NOW(), ADDDATE(NOW(), INTERVAL 30 MINUTE));";
+        String updateLineCleaning           = "UPDATE glanolaLineCleaning SET endTime = ADDDATE(NOW(), INTERVAL 30 MINUTE) "
+                                            + " WHERE id = ?";
+        PreparedStatement stmt              = null;
+        ResultSet rs                        = null;
+        
+        try {
+
+            if (abort == 1) {
+                stmt                        = transconn.prepareStatement("SELECT id FROM glanolaLineCleaning WHERE location = ? AND NOW() BETWEEN startTime and endTime");
+                stmt.setInt(1, locationId);
+                rs                          = stmt.executeQuery();
+                while (rs.next()) {
+                    stmt                    = transconn.prepareStatement("UPDATE glanolaLineCleaning SET endTime = NOW() WHERE id = ?");
+                    stmt.setInt(1, rs.getInt(1));
+                    stmt.executeUpdate();
+                }
+            } else {
+                String[] linesArray         = lines.split(",");
+                for (int i = 0; i < linesArray.length; i++) {
+                    String line             = linesArray[i].trim();
+                    logger.debug("Cleaning Line: " + line);
+                    stmt                    = transconn.prepareStatement(selectLineId);
+                    stmt.setInt(1, locationId);
+                    stmt.setString(2, line);
+                    rs                      = stmt.executeQuery();
+                    if (rs.next()) {
+                        int lineId          = rs.getInt(1);
+
+                        stmt                = transconn.prepareStatement(selectLineCleaning);
+                        stmt.setInt(1, locationId);
+                        stmt.setInt(2, lineId);
+                        rs                  = stmt.executeQuery();
+                        if (rs.next()) {
+                            stmt            = transconn.prepareStatement(updateLineCleaning);
+                            stmt.setInt(1, rs.getInt(1));
+                            stmt.executeUpdate();
+                        } else {
+                            stmt            = transconn.prepareStatement(insertLineCleaning);
+                            stmt.setInt(1, locationId);
+                            stmt.setInt(2, lineId);
+                            stmt.executeUpdate();
+                        }
+                    }
+                }
+            }
+        } catch (SQLException sqle) {
+            logger.dbError("Database error: " + sqle.getMessage());
+            throw new HandlerException(sqle);
+        } finally {
+            close(rs);
+            close(stmt);
+        }/**/
+    }
+      
+    private void addBevPushMessage(Element toHandle, Element toAppend) throws HandlerException {
+        
+      // int locationId                      = HandlerUtils.getOptionalInteger(toHandle, "locationId");
+        
+       // generateVariancePerformanceMessage(locationId);
+       String selectVarianceAlert           = "SELECT DISTINCT bMU.deviceToken, bMLM.location, l.name, l.varianceAlert, tS.var"
+                                            + " FROM bevMobileLocationMap bMLM LEFT JOIN bevMobileUser bMU ON bMU.id = bMLM.user"
+                                            + " LEFT JOIN location l ON l.id = bMLM.location LEFT JOIN tierSummary tS ON tS.location = bMLM.location "
+                                            + " WHERE bMLM.active = 1 AND LENGTH(bMU.deviceToken) > 0 AND tS.date = DATE(SUBDATE(NOW(), INTERVAL 1 DAY)) "
+                                            + " ORDER BY bMU.deviceToken, bMLM.location;";
+       String selectLocationVariance        = "SELECT DISTINCT bMU.id,  bMLM.location, l.name, l.varianceAlert, tS.var "
+                                            + "FROM bevMobileLocationMap bMLM LEFT JOIN bevMobileUser bMU ON bMU.id = bMLM.user "
+                                            + "LEFT JOIN location l ON l.id = bMLM.location LEFT JOIN tierSummary tS ON tS.location = bMLM.location "
+                                            + "WHERE bMLM.active = 1 AND LENGTH(bMU.deviceToken) >60 AND tS.date = DATE(SUBDATE(NOW(), INTERVAL 1 DAY)) "
+                                            + " ORDER BY  bMLM.location;";
+       String getLastId                     = " SELECT LAST_INSERT_ID()";        
+        String selectMessage                = "SELECT id FROM bevPushMessage WHERE  pushTime BETWEEN (SELECT   IF( TIME(now())>'08:59:00' ,  (SELECT concat (DATE(ADDDATE(NOW(), INTERVAL 1 DAY)), ' 09:00:00')),(SELECT concat (DATE(NOW()), ' 08:59:00')) ) ) AND "
+                                            + " (SELECT   IF( TIME(now())>'8:59:00' ,  (SELECT concat (DATE(ADDDATE(NOW(), INTERVAL 2 DAY)), ' 08:59:00')),(SELECT concat (DATE(ADDDATE(NOW(), INTERVAL 1 DAY)), ' 09:00:00'))));";
+        PreparedStatement stmt              = null;
+        ResultSet rs                        = null, rsDetails = null;
+
+        try {
+            String  message                 ="", productName="";
+            int messageId                   = 0;
+            stmt                            = transconn.prepareStatement(selectMessage);
+            rs                              = stmt.executeQuery();
+            if(rs.next()) {
+                 messageId                  = rs.getInt(1);
+            } 
+            if(messageId <1){
+            message = "You have a New Notification!";
+            stmt                       = transconn.prepareStatement("INSERT INTO bevPushMessage (message,   pushTime) VALUES (?,(SELECT   IF( TIME(now())>'08:59:00' ,  (SELECT concat (DATE(ADDDATE(NOW(), INTERVAL 1 DAY)), ' 09:00:00')),(SELECT concat (DATE(NOW()), ' 09:00:00')) ) ));");
+            stmt.setString(1, message);           
+            stmt.executeUpdate();
+            
+            stmt                       = transconn.prepareStatement(getLastId);
+            rsDetails                  = stmt.executeQuery();
+            if(rsDetails.next()) {
+                messageId           = rsDetails.getInt(1);
+            }
+            }
+            
+            stmt                            = transconn.prepareStatement(selectLocationVariance);
+            rs                              = stmt.executeQuery();
+            while(rs.next()) {
+                 int userId                 = rs.getInt(1);
+                 int locationId             = rs.getInt(2);
+                 double locationAlert       = rs.getDouble(4);
+                 double variance            = rs.getDouble(5);
+                 int color                  = 0;
+                 if(variance<locationAlert){
+                     color                  = 1;
+                 }
+                 message                    = String.valueOf(variance);
+                 addBevPushMessageMap(messageId, locationId, userId, color, 0,message);
+            } 
+        } catch (SQLException sqle) {
+            logger.dbError("Database error in getDashBoardVariance: " + sqle.getMessage());
+            throw new HandlerException(sqle);
+        } finally {
+            close(rsDetails);
+            close(rs);
+            close(stmt);
+        }
+    }
+    
+    private void addBevPushMessageMap(int messageId, int location, int user, int color, int type, String message) throws HandlerException {
+        
+        PreparedStatement stmt              = null;
+        ResultSet rs                        = null, rsDetails = null;
+
+        try {
+            stmt                            = transconn.prepareStatement("SELECT id FROM bevPushMessageCenter p WHERE p.user=? AND pushMessage= ? AND location = ? AND type =?");
+            stmt.setInt(1,user);
+            stmt.setInt(2,messageId);
+            stmt.setInt(3,location);
+            stmt.setInt(4,type);
+            rsDetails                       = stmt.executeQuery();
+            if(rsDetails.next()){
+                stmt                        = transconn.prepareStatement("UPDATE  bevPushMessageCenter  SET message = ?, color =?, lastUpdate=now() WHERE  pushMessage = ? AND location = ? AND type = ? AND  user =?");                            
+                stmt.setString(1,message);
+                stmt.setInt(2,color);
+                stmt.setInt(3,messageId);
+                stmt.setInt(4,location);
+                stmt.setInt(5,type);
+                stmt.setInt(6,user);
+                stmt.executeUpdate();
+            } else {
+                stmt                        = transconn.prepareStatement("INSERT INTO bevPushMessageCenter (pushMessage, location, message, user, color,type, lastUpdate) VALUES (?,?,?,?,?,?, now());");                            
+                stmt.setInt(1,messageId);
+                stmt.setInt(2,location);
+                stmt.setString(3,message);
+                stmt.setInt(4,user);
+                stmt.setInt(5,color);
+                stmt.setInt(6,type);
+                stmt.executeUpdate();
+            }
+            
+            stmt                        = transconn.prepareStatement("SELECT id FROM bevPushMessageMap WHERE user=? AND pushMessage= ?");
+            stmt.setInt(1,user);
+            stmt.setInt(2,messageId);
+            rsDetails                   = stmt.executeQuery();
+            if(!rsDetails.next()){
+                stmt                    = transconn.prepareStatement("INSERT INTO bevPushMessageMap (user, pushMessage, sent) VALUES (?,?,0);");
+                stmt.setInt(1,user);
+                stmt.setInt(2,messageId);
+                stmt.executeUpdate();
+            }
+            
+            
+            
+        } catch (SQLException sqle) {
+            logger.dbError("Database error in bevPushMessagee: " + sqle.getMessage());
+            throw new HandlerException(sqle);
+        } finally {
+            close(rsDetails);
+            close(rs);
+            close(stmt);
+        }
+    }
+    
+    public void addUserHistory(int userId, String action, int locationId, String message, int mobileId) throws HandlerException {
+        transconn                           = DatabaseConnectionManager.getNewConnection(transConnName, " (SQLBevManagerMobileTransHandler)");
+        String checkAction                  = " SELECT id FROM task WHERE abbrev=? LIMIT 1";
+        String insertFullLog                = " INSERT INTO userHistoryMobile (user,task,description,location,mobile,timestamp) " 
+                                            + " VALUES (?,?,?,?,?,now()) ";
+        PreparedStatement stmt              = null;
+        ResultSet rs                        = null;
+        
+        try {
+            // check that the action exists (has a task id)
+            int taskId                      = 0;
+            stmt                            = transconn.prepareStatement(checkAction);
+            stmt.setString(1, action);
+            rs                              = stmt.executeQuery();
+            if (rs.next()) {
+                taskId                      = rs.getInt(1);
+            } else {
+                // if the task doesn't exist, we'll insert it as task 0 and
+                // prepend the name of the supplied task to the message;
+                message                     = "UNKNOWN ("+action+") "+message;
+            }
+
+            stmt                            = transconn.prepareStatement(insertFullLog);
+            stmt.setInt(1,userId);
+            stmt.setInt(2,taskId);
+            stmt.setString(3, message);
+            stmt.setInt(4,locationId);                
+            stmt.setInt(5,mobileId);
+            stmt.executeUpdate();
+        } catch (SQLException sqle) {
+            logger.dbError("Database error in getProductSet: " + sqle.getMessage());
+            throw new HandlerException(sqle);
+        } finally {
+            close(rs);
+            close(stmt);
+        }
+        transconn.close();
+    }
+      
+    private void movePLUBeverage(Element toHandle, Element toAppend) throws HandlerException {
+        
+       
+        int fromlocation                        = 566 ;        
+        int tolocation                          = 984 ;       
+        
+        String checkPlu                     =" SELECT id,name,bar,plu,ounces,price,simple,category,pType,retired FROM beverage    WHERE  location=?";
+        String getLastId                    =" SELECT LAST_INSERT_ID()";
+        String insertBev                    = " INSERT INTO beverage (name, location, bar,plu,ounces,price, simple,category, pType,retired) VALUES (?,?,?,?,?,?,?,?,?,?)";
+        String selectIng                    ="SELECT product,ounces FROM ingredient WHERE beverage = ?";
+        String insertIng                    =" INSERT INTO ingredient (beverage, product, ounces)  VALUES (?,?,?)";
+        
+        
+        PreparedStatement stmt              = null;
+        ResultSet rs                        = null, rsBevId = null, rsIng=null;
+        try {
+              stmt                          = transconn.prepareStatement(checkPlu);
+              stmt.setInt(1, fromlocation);
+              rs                            =  stmt.executeQuery();
+              while(rs.next()) {
+                  int fromId                = rs.getInt(1);
+                  String name               = HandlerUtils.nullToEmpty(rs.getString(2));
+                  int bar                   = rs.getInt(3);
+                  String plu               = HandlerUtils.nullToEmpty(rs.getString(4));
+                  double ounces             = rs.getDouble(5);
+                  double price              = rs.getDouble(6);
+                  int simple                = rs.getInt(7);
+                  int category                = rs.getInt(8);
+                  int pType                 = rs.getInt(9);
+                  int retired                 = rs.getInt(10);
+                  
+                   stmt                = transconn.prepareStatement(insertBev);
+                   stmt.setString(1, name);
+                   stmt.setInt(2, tolocation);
+                   stmt.setInt(3, bar);
+                   stmt.setString(4, plu);
+                   stmt.setDouble(5, ounces);
+                   stmt.setDouble(6, price);
+                   stmt.setInt(7, simple);
+                   stmt.setInt(8, category);
+                   stmt.setInt(9,pType);
+                   stmt.setInt(10,retired);
+                   stmt.executeUpdate();
+                   int beverageId      = -1;
+                   stmt                = transconn.prepareStatement(getLastId);
+                   rsBevId = stmt.executeQuery();
+                   if (rsBevId.next()) {
+                   beverageId      = rsBevId.getInt(1);
+                   stmt                = transconn.prepareStatement(selectIng);
+                   stmt.setInt(1, fromId);
+                   rsIng = stmt.executeQuery();
+                   while(rsIng.next()){
+                       int productId          = rsIng.getInt(1);
+                       double quantity          = rsIng.getDouble(2);
+                       //logger.debug(name+":"+ounces+" "+quantity+""+fromId);
+                       stmt            = transconn.prepareStatement(insertIng);
+                       stmt.setInt(1, beverageId);
+                       stmt.setInt(2, productId);
+                       stmt.setDouble(3, quantity);                            
+                       stmt.executeUpdate();
+                   }
+                   }
+                    
+                  
+              }
+            
+             
+            
+            
+               
+        
+        } catch (SQLException sqle) {
+            logger.dbError("Database error in moveBeverage: " + sqle.getMessage());
+            throw new HandlerException(sqle);
+        } finally {
+            close(rsIng);
+            close(rsBevId);
+            close(rs);
+            close(stmt);
+        }
+
+    }
+      
+      
+    private void assignLineNo(Element toHandle, Element toAppend) throws HandlerException {
+        
+       
+       String selectLocation                = "SELECT DISTINCT location from bar ;"; 
+       String selectLines                   = "SELECT l.id, l.lineNo,l.lineIndex,s.systemId FROM line as l LEFT JOIN product AS p ON p.id = l.product"
+                                            + " LEFT JOIN bar b ON b.id = l.bar LEFT JOIN system s ON s.id=l.system "
+                                            + " WHERE b.location  = ? AND l.status <> 'RETIRED' ORDER BY s.systemId,l.lineIndex;";
+       String updateLineNo                  = "UPDATE line SET lineNo= ? WHERE id= ?";
+        
+        PreparedStatement stmt              = null;
+        ResultSet rs                        = null, rsloc = null;
+        try {
+              stmt                          = transconn.prepareStatement(selectLocation);             
+              rsloc                         =  stmt.executeQuery();
+              while(rsloc.next()) {
+                  int location              = rsloc.getInt(1);
+                  int lineIndex                 = 1;  
+                  stmt                          = transconn.prepareStatement(selectLines);
+                  stmt.setInt(1, location);
+                  rs                            =  stmt.executeQuery();
+                  while(rs.next()) {
+                      int lineId                = rs.getInt(1);
+                      String lineNo             = HandlerUtils.nullToEmpty(rs.getString(2));
+                  //if(lineNo==null || lineNo.equals("")|| lineNo.equals("0")) 
+                  {
+                      stmt                = transconn.prepareStatement(updateLineNo);
+                      stmt.setString(1, String.valueOf(lineIndex));
+                      stmt.setInt(2, lineId);                   
+                      stmt.executeUpdate();
+                      lineIndex++;
+                      
+                  }
+                   
+                  
+                    
+                  
+              }
+              }
+            
+             
+            
+            
+               
+        
+        } catch (SQLException sqle) {
+            logger.dbError("Database error in moveBeverage: " + sqle.getMessage());
+            throw new HandlerException(sqle);
+        } finally {
+           
+            close(rsloc);
+            close(rs);
+            close(stmt);
+        }
+
+    }
+    
+    
+    private void addInventoryBeveragePrice(Element toHandle, Element toAppend) throws HandlerException {
+        int location                        = HandlerUtils.getRequiredInteger(toHandle, "locationId");        
+        String checkInventory               = "SELECT id FROM inventory WHERE location= ? AND product = ?;";
+        String insertInventory              = " INSERT INTO inventory (product,location)  VALUES (?,?) ";
+         
+        String checkPlu                     =" SELECT id,bev.name FROM beverage bev  WHERE bev.location=? AND bev.plu=? LIMIT 1";
+        String getLastId                    =" SELECT LAST_INSERT_ID()";
+        String insertBev                    = " INSERT INTO beverage (name, location, plu,ounces,price, simple, pType) VALUES (?,?,?,?,?,1,1)";
+        String insertIng                    =" INSERT INTO ingredient (beverage, product, ounces)  VALUES (?,?,?)";
+        String selectBeverage               ="SELECT product,plu,size,price,productName,id FROM addBeverage WHERE location =? AND isInsert=0;";
+        String checkSize                    = "SELECT id FROM beverageSize WHERE location=? AND ounces BETWEEN (?-0.05) AND (?+0.05)";
+        String selectBeverageSize           ="SELECT DISTINCT size FROM addBeverage WHERE location =? AND isInsert=0;";
+        String insertBeverageSize           = "INSERT INTO beverageSize (location,name,ounces) VALUES (?,?,?)";
+        String updateBeverageList           = "UPDATE addBeverage SET isInsert =1 WHERE id= ?";
+        String insertProduct                = "INSERT INTO product (name, qId, pType, category, segment, isActive, approved) VALUES (?,0,1,2,10,1,0)";
+        String insertLog                    = "INSERT INTO productChangeLog (product,type,date) VALUES (?,1,now())";
+        String insertProductDescription     = " INSERT INTO productDescription (product, boardName, abv, category, origin, seasonality,ibu,breweryDB) VALUES" +
+                                            " (?,?,0.0,2,'','',0,'')";
+        String insertBrewStyleMap           = " INSERT INTO brewStyleMap (product, brewery, style) VALUES (?,0,0)";
+        String selectSize                   = "SELECT id,ounces FROM beverageSize WHERE location=?; ";
+        String selectPrices                = " SELECT id FROM inventoryPrices WHERE inventory = ? AND size = ? AND value = ? ";        
+        String insertPrices                = " INSERT INTO inventoryPrices (inventory, size,value) VALUES (?,?,?) ";
+        
+         Map<Float,Integer> sizeMap      = new HashMap< Float, Integer>();
+     
+        
+        PreparedStatement stmt              = null;
+        ResultSet rs                        = null, rsDetails = null;
+        try {
+            stmt                        = transconn.prepareStatement(selectBeverageSize);
+            stmt.setInt(1, location);            
+            rs                          = stmt.executeQuery();                   
+            while(rs.next()) { 
+                float  ounces          = rs.getFloat(1);
+                stmt                    = transconn.prepareStatement(checkSize);
+                stmt.setInt(1, location);
+                stmt.setFloat(2, ounces);
+                stmt.setFloat(3, ounces);
+                rsDetails               = stmt.executeQuery();
+                if (!rsDetails.next()) {
+                    stmt                = transconn.prepareStatement(insertBeverageSize);
+                    stmt.setInt(1, location);
+                    stmt.setString(2, String.valueOf(ounces)+"Oz");
+                    stmt.setFloat(3, ounces);
+                    stmt.executeUpdate();
+                    stmt                    = transconn.prepareStatement(getLastId);
+                    rsDetails               = stmt.executeQuery();                   
+                    if (rsDetails.next()) { 
+                        int newId           = rsDetails.getInt(1);
+                        String logMessage   = "Adding a beverage size named '" + String.valueOf(ounces)+"Oz" + "' " + "(" +ounces+ " oz)";
+                        logger.portalDetail(201, "addBeverageSize", location, "beverageSize", newId, logMessage, transconn);
+                    }
+
+                }
+            }
+            
+            stmt                        = transconn.prepareStatement(selectSize);
+            stmt.setInt(1, location);            
+            rs                          = stmt.executeQuery();                   
+            while(rs.next()) { 
+                
+                sizeMap.put(rs.getFloat(2), rs.getInt(1));
+            }
+            stmt                        = transconn.prepareStatement(selectBeverage);
+            stmt.setInt(1, location);            
+            rs                          = stmt.executeQuery();                   
+            while(rs.next()) { 
+                int productId          = rs.getInt(1);
+                String plu             = rs.getString(2);
+                float size               = rs.getFloat(3);
+                double price           = rs.getDouble(4);
+                String productName     = rs.getString(5);
+                int id                      = rs.getInt(6);
+                int inventory          = 0;
+                if(productId == 0) {
+                stmt                       = transconn.prepareStatement("SELECT id FROM product WHERE ptype=1 AND name =?");
+                stmt.setString(1, productName);
+                rsDetails                  = stmt.executeQuery();                   
+                if (rsDetails.next()) { 
+                    productId              = rsDetails.getInt(1);
+                    stmt                       = transconn.prepareStatement("UPDATE addBeverage SET product =? WHERE productName= ? AND isInsert=0");      
+                    stmt.setInt(1, productId);                        
+                    stmt.setString(2, productName);                        
+                    stmt.executeUpdate();
+                    
+                }
+                }
+                if(productId == 0) {
+                    
+                    stmt                       = transconn.prepareStatement(insertProduct);                    
+                    stmt.setString(1,productName);
+                    stmt.executeUpdate();
+                    stmt                       = transconn.prepareStatement(getLastId);
+                    rsDetails                  = stmt.executeQuery();                   
+                    if (rsDetails.next()) { 
+                        productId              = rsDetails.getInt(1);
+
+                    }
+                    if(productId > 0){
+                        String logMessage = "Added product " + productName;
+                        logger.portalDetail(201, "addProduct", location, "product", productId, logMessage, transconn);
+                        stmt                       = transconn.prepareStatement(insertProductDescription);      
+                        stmt.setInt(1, productId);
+                        stmt.setString(2,productName);
+                        stmt.executeUpdate();
+                        
+                        stmt                       = transconn.prepareStatement(insertBrewStyleMap);      
+                        stmt.setInt(1, productId);                        
+                        stmt.executeUpdate();
+                        
+                        stmt                       = transconn.prepareStatement(insertLog);      
+                        stmt.setInt(1, productId);                        
+                        stmt.executeUpdate();
+                        
+                        stmt                       = transconn.prepareStatement("UPDATE addBeverage SET product =? WHERE id= ?");      
+                        stmt.setInt(1, productId);                        
+                        stmt.setInt(2, id);                        
+                        stmt.executeUpdate();
+                        
+                        stmt                       = transconn.prepareStatement("UPDATE addBeverage SET product =? WHERE productName= ? AND isInsert=0");      
+                        stmt.setInt(1, productId);                        
+                        stmt.setString(2, productName);                        
+                        stmt.executeUpdate();
+                    }
+                }
+                if(productId > 0){
+                stmt                       = transconn.prepareStatement(checkInventory);
+                stmt.setInt(1, location);
+                stmt.setInt(2, productId);
+                rsDetails                  = stmt.executeQuery();                   
+                if (rsDetails.next()) { 
+                    inventory              = rsDetails.getInt(1);
+                } else{
+                    stmt                       = transconn.prepareStatement(insertInventory);
+                    stmt.setInt(2, location);
+                    stmt.setInt(1, productId);
+                    stmt.executeUpdate();
+                    stmt                       = transconn.prepareStatement(getLastId);
+                    rsDetails                  = stmt.executeQuery();                   
+                    if (rsDetails.next()) { 
+                        inventory              = rsDetails.getInt(1);
+
+                    }
+                    String logMessage = "Added product " + productId + " to inventory";
+                    logger.portalDetail(201, "addInventory", location, "inventory", inventory, logMessage, transconn);
+                }
+                }
+                if(inventory>0){
+                    logger.debug("Inventory:"+inventory +": "+ productName);
+                    stmt                        = transconn.prepareStatement(checkPlu);
+                    stmt.setInt(1, location);
+                    stmt.setString(2, plu);
+                    rsDetails                    = stmt.executeQuery();                   
+                    if (!rsDetails.next()) { 
+                        stmt                = transconn.prepareStatement(insertBev);
+                            stmt.setString(1, productName);
+                            stmt.setInt(2, location);
+                            stmt.setString(3, plu);
+                            stmt.setDouble(4, size);
+                            stmt.setDouble(5, price);
+                            stmt.executeUpdate();
+                            int beverageId      = -1;
+                            stmt                = transconn.prepareStatement(getLastId);
+                            rsDetails = stmt.executeQuery();
+                            if (rsDetails.next()) {
+                                String logMessage = "Added plu#" + plu;                                
+                                logger.portalDetail(201, "addBeverage", location, "beverage", beverageId, logMessage, transconn);
+                                beverageId      = rsDetails.getInt(1);
+                                logger.debug("Beverage:"+beverageId);
+                                stmt            = transconn.prepareStatement(insertIng);
+                                stmt.setInt(1, beverageId);
+                                stmt.setInt(2, productId);
+                                stmt.setDouble(3, size);                            
+                                stmt.executeUpdate();
+                            }
+                            stmt                       = transconn.prepareStatement(updateBeverageList);
+                            stmt.setInt(1, id);                   
+                            stmt.executeUpdate();
+                    }
+                    
+                    int sizeId              = sizeMap.get(size);
+                    if(price> 0) {
+                    stmt                        = transconn.prepareStatement(selectPrices);
+                    stmt.setInt(1, inventory);
+                    stmt.setInt(2, sizeId);
+                    stmt.setDouble(3, price);
+                    rsDetails                    = stmt.executeQuery();                   
+                    if (!rsDetails.next()) { 
+                        stmt                        = transconn.prepareStatement(insertPrices);
+                        stmt.setInt(1, inventory);
+                        stmt.setInt(2, sizeId);
+                        stmt.setDouble(3, price);
+                        stmt.executeUpdate();
+                        
+                    }
+                    }
+                    
+                   
+                        
+                }
+
+
+           }
+           
+            
+        } catch (SQLException sqle) {
+            logger.dbError("Database error in addBeveage from list: " + sqle.getMessage());
+            throw new HandlerException(sqle);
+        } finally {
+            close(rsDetails);
+            close(rs);
+            close(stmt);
+        }
+
+    }
+        
+      
+}

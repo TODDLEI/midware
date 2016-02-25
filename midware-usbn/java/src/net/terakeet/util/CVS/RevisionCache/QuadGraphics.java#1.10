@@ -1,0 +1,64 @@
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
+
+package net.terakeet.util;
+
+/**
+ *
+ * @author Sundar
+ */
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.URL;
+import java.net.HttpURLConnection;
+import java.util.*;
+
+public class QuadGraphics {
+    private MidwareLogger logger;
+    
+    public void postMenu() {
+        logger                              = new MidwareLogger(QuadGraphics.class.getName());
+        try {
+            String prodUrl                  = "https://CS_BEVNET_SRV_:g75Psn4JQ@www.qconnect.com/bwwbevnet/api/Post/";
+
+            String smsUrl                   = prodUrl;
+            logger.debug("Step 1");
+            
+            URL url                         = new URL(smsUrl);
+            HttpURLConnection conn          = (HttpURLConnection) url.openConnection();
+            conn.setDoOutput(true);
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.connect();
+            logger.debug("Connection log: " + conn.toString());
+            logger.debug("Step 2");
+            
+            String input                    = "";
+
+            OutputStream os                 = conn.getOutputStream();
+            os.write(input.getBytes());
+            os.flush();
+            logger.debug("Step 3");
+
+            BufferedReader serverResponse   = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+            logger.debug(serverResponse.toString());
+            String line;
+            StringBuffer response           = new StringBuffer(); 
+            while((line = serverResponse.readLine()) != null) {
+                response.append(line);
+                response.append('\r');
+            }
+            logger.debug("Step 4");
+
+            serverResponse.close();
+            logger.debug("reponse: " + response.toString());
+          } catch (Exception e) {
+              e.printStackTrace();
+        }
+    }
+}

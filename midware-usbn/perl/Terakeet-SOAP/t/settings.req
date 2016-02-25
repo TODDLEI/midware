@@ -1,0 +1,13 @@
+# required parameters for Terakeet::SOAP testing
+# $Id: settings.req,v 1.1.1.1 2005/08/26 19:16:01 anonymous Exp $
+
+$TEST_HOST	= "10.255.253.89";#127.0.0.1";
+$TEST_SSL	= 0;
+$TEST_PORT	= 2957;
+$TEST_WAIT	= 1;
+$TEST_METHOD	= "countCustomerInstances";
+%TEST_PARAMS	= (
+			"serviceNumber" => "3155394695",
+		  );
+
+$TEST_DEBUG	= 1;

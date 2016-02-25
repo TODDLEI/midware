@@ -1,0 +1,60 @@
+/*
+ * To change this template, choose Tools | Templates
+ * and open the template in the editor.
+ */
+
+package net.terakeet.soapware.handlers.report;
+
+import net.terakeet.soapware.*;
+
+/**
+ *
+ * @author sravindran   
+ */
+public class PreOpenHoursSummaryStructure {
+//NischaySharma_22-Sep-2009_Start
+    private int _customerId                 = 0;
+    private int _locationId                 = 0;
+    private int _barId                      = 0;
+    private int _productId                  = 0;
+    private double _value;
+    private String _customerName;
+    private String _locationName;
+    private String _barName;
+    private String _productName;
+
+    public PreOpenHoursSummaryStructure() {
+
+    }
+
+    public PreOpenHoursSummaryStructure(int customerId, String customerName, int locationId, String locationName, int barId, String barName, int productId, String productName, double value){
+        _customerId                         = customerId;
+        _customerName                      = customerName;
+        _locationId                         = locationId;
+        _locationName                       = locationName;
+        _barId                              = barId;
+        _barName                            = barName;
+        _productId                          = productId;
+        _productName                        = productName;
+        _value                              = value;
+    }
+    
+    public int CustomerId(){return _customerId;}
+
+    public int LocationId(){return _locationId;}
+    
+    public int BarId(){return _barId;}
+    
+    public int ProductId(){return _productId;}
+    
+    public String CustomerName(){return _customerName;}
+
+    public String LocationName(){return _locationName;}
+    
+    public String BarName(){return _barName;}
+    
+    public String ProductName(){return _productName;}
+    
+    public double Value(){return _value;}
+//NischaySharma_22-Sep-2009_End
+}

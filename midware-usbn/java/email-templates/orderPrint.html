@@ -1,0 +1,93 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<title>Purchase Order</title>
+</head>
+<body>
+
+<div style="margin-left: 10px">
+
+<table width="700" cellspacing="0" cellpadding="0">
+ <tr>
+   <td width="100" />
+   <td width="200" />
+   <td width="100" />
+   <td width="100" />
+   <td width="100" />
+ </tr>
+ <tr>
+  <td/>
+  <td colspan="4" style="font-size:large"><strong>Purchase Order</strong></td>
+ </tr>
+
+ <tr><td colspan="5">&nbsp;</td></tr>
+
+ <tr>
+   <td colspan="2"><strong>Supplier</strong></td>
+   <td colspan="3"><strong>Date</strong></td>
+ </tr>
+ <tr>
+   <td colspan="2">@@SUPPLIER_NAME@@</td>
+   <td colspan="3">@@DATE@@</td>
+ </tr>
+ <tr>
+   <td colspan="5">@@SUPPLIER_ADDRESS1@@</td>
+ </tr>
+ <tr>
+   <td colspan="5">@@SUPPLIER_ADDRESS2@@</td>
+ </tr>
+ <tr><td colspan="5">&nbsp;</td></tr>
+ <tr>
+   <td colspan="5"><strong>Customer</strong></td>
+ </tr>
+ <tr>
+   <td colspan="5">@@CUSTOMER@@</td>
+ </tr>
+ <tr>
+   <td colspan="5">@@LOCATION@@</td>
+ </tr>
+ <tr><td colspan="5">&nbsp;</td></tr>
+ <tr>
+   <td colspan="2"><strong>Shipping Address</strong></td>
+   <td colspan="3"><strong>Billing Address</strong></td>
+ </tr>
+ <tr>
+   <td colspan="2">@@SHIPPING_ADDRESS1@@</td>
+   <td colspan="3">@@BILLING_ADDRESS1@@</td>
+ </tr>
+ <tr>
+   <td colspan="2">@@SHIPPING_ADDRESS2@@</td>
+   <td colspan="3">@@BILLING_ADDRESS2@@</td>
+ </tr>
+ <tr><td colspan="5">&nbsp;</td></tr>
+ <tr>
+   <td colspan="2"><strong>Account Number</strong></td>
+   <td colspan="3"><strong>USBN Order Number</strong></td>
+ </tr>
+ <tr>
+   <td colspan="2">---</td>
+   <td colspan="3">@@ORDER_NUMBER@@</td>
+ </tr>
+ <tr><td colspan="5">&nbsp;</td></tr>
+ <tr>
+   <td><strong>SKU</strong></td>
+   <td><strong>Product</strong></td>
+   <td><strong>Quantity</strong></td>
+   <td><!-- Unit Price --></td>
+   <td><!-- Extended Price --></td>
+ </tr>
+@@DRAFT@@
+@@NONDRAFT@@
+
+ <tr><td colspan="5">&nbsp;</td></tr>
+
+ <tr><td colspan="5"><hr /></td></tr>
+
+ <tr><td colspan="5"></td></tr>
+</table>
+
+<br /><br />
+
+</div>
+</body>
+</html>
